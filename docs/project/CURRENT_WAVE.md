@@ -1,31 +1,38 @@
 # Current Wave
 
-**Phần 1 — Product Genesis + Repository Archaeology + Project Memory: HOÀN
-TẤT** (15 bước theo Master Prompt mục LXXVI đã thực hiện đủ, xem
-`docs/checkpoints/LATEST.md`).
+**Phần 2 — Target Domain Architecture + Data Ownership + Tenant Boundaries +
+Migration Contracts: HOÀN TẤT** (đã qua red-team + simplicity review đối
+kháng, tất cả P1/P2 tìm được đã sửa — xem `docs/architecture/RED_TEAM_REVIEW.md`).
 
-**Tiếp theo: Phần 2 — Target Domain Architecture + Data Ownership + Tenant
-Boundaries + Migration Contracts.**
+**Tiếp theo: Phần 3 — Ecosystem + Company + Identity + Membership +
+Permission + Tenant Security Foundation.** Đây là phase bắt đầu implement
+thật (Prisma schema thật, auth, enforcement code) — không còn chỉ là docs.
 
-Trước khi bắt đầu Phần 2, đọc đúng đoạn tương ứng trong
-`MASTER PROMPT — TAPDOANYTEDALINHVUC.docx` (bắt đầu từ dòng ~3615, tiêu đề
-"MASTER PROMPT --- PHẦN 2/10", kết thúc trước "PART 3" ở dòng ~7794) — KHÔNG
-cần đọc lại Phần 1 (đã chưng cất đủ vào `docs/`). File gốc đã convert sẵn ra
-`AppData\Local\Temp\claude\...\scratchpad\master_prompt.md` trong phiên tạo
-checkpoint này; nếu phiên sau không còn file đó, convert lại bằng
+Trước khi bắt đầu Phần 3, đọc đúng đoạn tương ứng trong
+`MASTER PROMPT — TAPDOANYTEDALINHVUC.docx` (bắt đầu từ dòng ~7794, "PART 3
+--- ECOSYSTEM + COMPANY + IDENTITY + PERMISSION FOUNDATION"). Nếu file convert
+`master_prompt.md` trong scratchpad không còn, convert lại bằng
 `pandoc -t markdown "MASTER PROMPT — TAPDOANYTEDALINHVUC.docx" -o master_prompt.md`
-rồi đọc đúng dải dòng trên (dùng `grep -n` để định vị lại nếu số dòng lệch
-do version doc khác).
+rồi `grep -n "PART 3\|PART 4"` để định vị lại range.
 
-Phần 2 đã có sẵn rất nhiều input chất lượng cao để không phải thiết kế từ
-đầu — xem trước khi thiết kế:
+## Input đã sẵn sàng cho Phần 3 (không cần thiết kế lại từ đầu)
 
-- `docs/legacy/LEGACY_CAPABILITY_MATRIX.md` — đặc biệt mục "⚠️ Mâu thuẫn tài
-  liệu quan trọng" (cần xác minh lại trạng thái migrate production thật của
-  ZenithTasks) và L-V01 (lỗ hổng ADMIN-bypass cụ thể cần tránh).
-- `docs/legacy/SALVAGE_LEDGER.md` — pattern đáng giữ + bài học không lặp lại
-  + migration wave đề xuất tham khảo.
-- Audit doc gốc (`tổng nhận xét dự án của chúng ta.docx`) Phiên 2/4 đã có một
-  bản thiết kế domain model khá chi tiết (Ecosystem/Company/OrgUnit/Position/
-  Project, bridge migration 8 giai đoạn) — dùng làm tham khảo, nhưng
-  MASTER PROMPT Phần 2 mới là nguồn quyết định cuối.
+- `docs/architecture/DOMAIN_MODEL.md` — schema conceptual đầy đủ, đã qua
+  red-team review, đã sửa xong mọi gap tìm được.
+- `docs/architecture/TENANT_INVARIANTS.md` — acceptance test bắt buộc phải
+  có code thật tương ứng ở Phần 3. **Đặc biệt chú ý 2 điểm mới chốt sau
+  review**: (1) `ECOSYSTEM_ADMIN`/`FOUNDER` không tự động ghi được vào một
+  Company cụ thể nếu không có `CompanyMembership` tường minh trên Company đó
+  — kể cả khi ghi qua AI; (2) composite FK/DB constraint là **bắt buộc**
+  (không tuỳ chọn) cho quan hệ cross-entity trong Finance và Healthcare.
+- `docs/architecture/SECURITY_BOUNDARIES.md`, `docs/architecture/DATA_OWNERSHIP.md`.
+- `docs/architecture/LEGACY_TO_TARGET_MAP.md` — mapping model-by-model, biết
+  ngay ZenithTasks nào KEEP/REMAP/RETIRE/MERGE.
+- ADR-001 đến ADR-011 trong `docs/architecture/DECISIONS.md`.
+
+## Việc CHƯA làm ở Phần 2 (đúng phạm vi, không phải thiếu sót)
+
+Không có Prisma schema thật nào ngoài `HealthCheck` bootstrap của Phần 1 —
+Phần 2 chỉ là conceptual design (đúng theo mục CXXIV Master Prompt: "KHÔNG
+IMPLEMENT FULL DATABASE"). Phần 3 mới bắt đầu viết schema Ecosystem/Company/
+Membership thật + auth + enforcement.

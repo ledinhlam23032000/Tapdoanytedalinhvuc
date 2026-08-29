@@ -84,3 +84,87 @@ mới cho xịn".
 
 **Hệ quả:** Bootstrap kỹ thuật tối thiểu của Phiên 1 dùng đúng họ công nghệ
 này (xem `docs/project/CURRENT_STATE.md`).
+
+## ADR-007 — Ecosystem boundary, không phải "GLOBAL = toàn database"
+
+**Quyết định:** `Ecosystem` là entity platform-level thật (không phải khái
+niệm ảo). `GLOBAL` trong mọi ngữ cảnh (AI scope, admin console, aggregate
+query) luôn có nghĩa "trong phạm vi một Ecosystem cụ thể", không bao giờ là
+"toàn bộ database".
+
+**Vì sao:** Kể cả khi deployment đầu chỉ có 1 Ecosystem, encode cứng
+"GLOBAL = whole DB" sẽ chặn đường tới staging ecosystem, demo ecosystem,
+SaaS hoá, hoặc một hệ sinh thái thứ hai sau này — đúng bẫy mà ZenithTasks V2
+đã mắc phải với `GLOBAL AI`.
+
+**Hệ quả:** Deployment đầu tiên seed đúng 1 `Ecosystem` qua seed/config,
+không hard-code ID trong source (mục CXV).
+
+## ADR-008 — Project nằm trong Company, không nullable, không mini-ERP
+
+**Quyết định:** `Project.companyId` bắt buộc (không nullable). Project không
+sở hữu Customer/Payroll/Ledger/Sales riêng — chỉ tham chiếu qua attribution.
+Cross-company Project (2 Company hợp tác) không giải ở Phần 2, để dành capability
+riêng cho tương lai.
+
+**Vì sao:** Làm `companyId` nullable "cho linh hoạt" chính là kiểu ambiguity
+đã khiến ZenithTasks lệch hướng (mục LXXV Master Prompt Phần 2). Một Project
+sở hữu mini-ERP riêng cũng là nguyên nhân trực tiếp khiến `ZWorkspaceSale/
+LedgerEntry/PayrollRun` scoped nhầm theo `projectId` thay vì `companyId`.
+
+**Hệ quả:** Mọi bản ghi Company-level (Customer, Sale, LedgerEntry, WorkItem…)
+có `companyId` bắt buộc + `projectId?` optional attribution — không bao giờ
+ngược lại.
+
+## ADR-009 — Identity tách khỏi Membership/Role/Permission
+
+**Quyết định:** `User` chỉ chứa platform identity (id, tên, định danh đăng
+nhập, credential linkage, status, profile). Role/quyền luôn scoped qua
+`EcosystemMembership`/`CompanyMembership`. `Position` (organizational
+identity, vd "Bác sĩ Tim mạch") tách khỏi authorization (`permissionPackRef`
+riêng).
+
+**Vì sao:** Đây là distinction bắt buộc của Master Prompt Phần 2 (mục
+XVIII–XX) và trực tiếp sửa sai lầm đã xảy ra thật ở ZenithTasks: `User.role`
+là enum Clinic-global, và code ở `v2-access.ts` dùng `user.role === "ADMIN"`
+làm authority tuyệt đối, bypass hoàn toàn kiểm tra membership theo từng
+Company (xem Legacy Capability Matrix mục L-V01).
+
+**Hệ quả:** Không route/policy nào trong Tapdoanytedalinhvuc được phép viết
+kiểu `if (user.role === "ADMIN") return true` để cấp quyền truy cập một
+Company cụ thể. Ecosystem-level access luôn qua `EcosystemMembership` tường
+minh.
+
+## ADR-010 — Organization (Branch/Department/Team) luôn nằm trong Company
+
+**Quyết định:** `OrganizationUnit` luôn có `companyId`, có `parentId?` tạo
+cây. Branch không mặc định là Company — chỉ tách thành Company độc lập khi
+thực sự là legal/operating boundary khác.
+
+**Vì sao:** Ngăn "workspace explosion" (audit lịch sử đã cảnh báo: nếu để
+chi nhánh/phòng khám/dự án đều tạo Company ngang hàng, Founder sẽ phải chọn
+giữa hàng chục "company" mà phần lớn thực ra chỉ là phòng ban/chi nhánh).
+
+**Hệ quả:** Company switcher chỉ liệt kê Company thật; Branch chỉ là filter/
+subscope trong Company context (header "Phạm vi: Toàn công ty / Hải Phòng /
+Hà Nội…"), không rebuild toàn bộ AppShell khi đổi Branch.
+
+## ADR-011 — Migration greenfield qua import/cutover, không sửa trực tiếp DB production của ZenithTasks
+
+**Quyết định:** Toàn bộ dữ liệu từ ZenithTasks di chuyển sang
+Tapdoanytedalinhvuc theo luồng: LEGACY SOURCE → READ-ONLY EXTRACT →
+TRANSFORM → VALIDATE → STAGING IMPORT → PARITY CHECK → REPEATABLE MIGRATION
+→ CUTOVER PLAN → PRODUCTION MIGRATION. Không bao giờ để app mới ghi trực
+tiếp vào DB production của ZenithTasks, và migration tooling phải tách khỏi
+application runtime code (retire được sau cutover).
+
+**Vì sao:** Đây là repo greenfield khác hẳn, không phải refactor tại chỗ —
+không có "dual read/write cùng codebase" như audit từng đề xuất cho phương
+án sửa ZenithTasks tại chỗ (phương án đó đã bị override). Migration tooling
+phải idempotent (mapping/checkpoint/retry/duplicate detection/verification)
+vì đây là thao tác một-lần cực kỳ rủi ro với dữ liệu tài chính/y tế thật.
+
+**Hệ quả:** Không viết migration script chạy thẳng ở Phần 2/3. Việc này
+thuộc Phần 10, sau khi toàn bộ domain đã ổn định và có parity check rõ ràng
+(Customer count, Finance totals, Open debt, Payroll history, Appointments,
+Medical cases, Inventory balances, Audit trails — mục LXXXVII).

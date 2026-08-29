@@ -1,9 +1,30 @@
-# Target Architecture (Phần 1 — hướng đi, chưa phải schema chi tiết)
+# Target Architecture
 
-Đây là target architecture direction chốt ở Phiên 1. Schema Prisma chi tiết,
-tenant boundary implementation, và migration contract thuộc **Phần 2** (xem
-`docs/project/MASTER_ROADMAP.md`). Tài liệu này chỉ trả lời các câu hỏi bắt
-buộc của Phiên 1, không hơn.
+## Cập nhật Phần 2 (Target Domain Architecture — HOÀN TẤT)
+
+Phần này của tài liệu (bên dưới) là hướng đi chốt ở Phiên 1 — vẫn đúng, giữ
+nguyên làm tổng quan. Chi tiết đầy đủ (conceptual schema, ownership matrix,
+tenant invariants, security boundaries, legacy→target mapping theo từng
+model) đã chốt ở Phần 2, xem các file:
+
+- `docs/architecture/DOMAIN_MODEL.md` — schema conceptual đầy đủ + ERD +
+  10 acceptance scenario.
+- `docs/architecture/DATA_OWNERSHIP.md` — ma trận ownership từng entity.
+- `docs/architecture/TENANT_INVARIANTS.md` — threat model + acceptance test
+  bắt buộc cho Phần 3.
+- `docs/architecture/SECURITY_BOUNDARIES.md` — ranh giới Identity/Permission/
+  AI safety/Audit/Secrets.
+- `docs/architecture/LEGACY_TO_TARGET_MAP.md` — mapping theo từng
+  model/entity (bổ sung Legacy Capability Matrix theo capability).
+- `docs/architecture/RED_TEAM_REVIEW.md` — kết quả review đối kháng trước
+  khi chuyển Phần 3.
+- ADR-007 đến ADR-011 trong `docs/architecture/DECISIONS.md`.
+
+## Nội dung gốc (Phiên 1 — hướng đi, chưa phải schema chi tiết)
+
+Đây là target architecture direction chốt ở Phiên 1. Tài liệu này chỉ trả
+lời các câu hỏi bắt buộc của Phiên 1 — đọc các file Phần 2 ở trên để có chi
+tiết đầy đủ.
 
 ## Product boundary
 

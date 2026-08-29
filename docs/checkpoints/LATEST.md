@@ -1,112 +1,130 @@
-# Checkpoint — Phần 1 hoàn tất
+# Checkpoint — Phần 2 hoàn tất
 
-DATE/TIME: 2026-08-30 (giờ máy: khoảng 02:xx, xem git commit timestamp để
-chính xác)
+(Checkpoint Phần 1 vẫn xem được ở lịch sử git — `git log --oneline` — commit
+"Part 1: product genesis...". File này chỉ giữ checkpoint MỚI NHẤT theo đúng
+Source of Truth Hierarchy.)
 
-PHASE 1 STATUS: **COMPLETE** (15/15 bước theo Master Prompt mục LXXVI)
+PHASE 2 STATUS: **COMPLETE** — `PART_2_COMPLETE`, `READY_FOR_PART_3`
 
-TARGET HEAD: xem commit ngay sau checkpoint này (`git log -1`) — sẽ là commit
-đầu tiên chứa toàn bộ Phần 1.
+TARGET HEAD: xem commit ngay sau checkpoint này (`git log -1`).
 
-LEGACY HEAD OBSERVED: `e420e3809b788f4f130db082dd798fe5e9e71b3a`
-(2026-08-29 22:34:39 +0700, branch `master`)
+LEGACY HEAD OBSERVED: `e420e3809b788f4f130db082dd798fe5e9e71b3a` (không đổi
+so với Phần 1 — không có hoạt động mới nào trên ZenithTasks).
 
 ## COMPLETED
 
-1. Recon môi trường: Node v24.18.0, npm 11.16, Docker 29.7.2 có sẵn, không
-   có `psql` local (dùng Docker Postgres thay thế), `git` có, `gh` CLI có
-   nhưng **chưa đăng nhập** (xem BLOCKERS).
-2. Xác minh target repo (`Tapdoanytedalinhvuc`, GitHub public, trước đó chỉ
-   có README.md + 1 commit) và legacy repo (`ZenithTasks`, GitHub public,
-   dự án thật đang chạy production cho 1 phòng khám thẩm mỹ).
-3. Đọc toàn bộ `MASTER PROMPT — TAPDOANYTEDALINHVUC.docx` phần Phiên 1
-   (dòng 1–~3615/54203 dòng — phần còn lại là Phần 2–10, chưa cần đọc).
-4. Đọc ~94% `tổng nhận xét dự án của chúng ta.docx` (audit 4 phiên: chẩn
-   đoán → kiến trúc → UX → kế hoạch cứu — phần cuối là MASTER PROMPT cũ dành
-   cho sửa ZenithTasks tại chỗ, đã bị override, không cần đọc hết).
-5. Khảo cổ ZenithTasks bằng workflow 5 agent song song (Core/Data Model,
-   Business Domains, AI Runtime, UX/Navigation, QA/Security/Docs) — mỗi agent
-   đọc trực tiếp source/schema/test/CHANGELOG thật, có evidence file:line.
-   Kết quả đầy đủ: `docs/legacy/LEGACY_CAPABILITY_MATRIX.md` +
-   `docs/legacy/SALVAGE_LEDGER.md`.
-6. Tạo toàn bộ Project Memory: `CLAUDE.md`, `docs/product/*`,
-   `docs/architecture/*`, `docs/legacy/*`, `docs/project/*`,
-   `docs/checkpoints/LATEST.md`, `PROJECT_STATE.json`.
-7. Bootstrap kỹ thuật tối thiểu: Next.js 16.3.3 + React 19.2.8 + TypeScript +
-   Tailwind v4 + Prisma 7.9.1 (`@prisma/adapter-pg`) + PostgreSQL 16 (Docker,
-   port 5442, cô lập khỏi ZenithTasks) + Vitest 4.
-8. Test: `npm run test` PASS, `npx tsc --noEmit` sạch, `npx eslint .` sạch,
-   `npx next build` PASS, xác nhận bằng browser thật (`/api/health` và `/`).
+1. Đọc toàn bộ Master Prompt Phần 2 (dòng ~3615–7793/54203 của
+   `master_prompt.md` convert từ docx).
+2. Thiết kế Domain Model đầy đủ: Ecosystem, EcosystemMembership, Company,
+   CompanyMembership, OrganizationUnit, Position, Assignment, Project,
+   ProjectMembership, WorkItem, generic business domains (Customer/
+   Appointment/Sale/LedgerEntry/PayrollRun/Inventory), Healthcare vertical
+   boundary, Agent (AI scope), Approval/Audit cross-cutting — có ERD Mermaid
+   + trả lời đủ 10 acceptance scenario + 12 câu hỏi entity relationship bắt
+   buộc (mục CI).
+3. Data Ownership Matrix đầy đủ theo Master Prompt mục CIII.
+4. Tenant Invariants: threat model 10 vector (mục CIV) + acceptance test
+   hình thức cho từng invariant.
+5. Security Boundaries: Identity/Permission, AI safety, Audit, Secrets,
+   Platform Operator.
+6. Legacy → Target Map theo từng model/entity (bổ sung Legacy Capability
+   Matrix theo capability của Phần 1).
+7. 5 ADR mới (ADR-007 đến ADR-011): Ecosystem boundary, Project trong
+   Company không nullable, Identity tách Membership/Role, Organization
+   trong Company, Migration greenfield qua import/cutover.
+8. **Red-team + Simplicity adversarial review** (workflow 2 agent độc lập,
+   mỗi agent tự đọc toàn bộ 7-8 doc + Legacy Capability Matrix, có trích dẫn
+   nguyên văn cho mọi kết luận) — xem `docs/architecture/RED_TEAM_REVIEW.md`.
+9. Sửa toàn bộ 3 vấn đề P1 + 5 vấn đề P2 mà review tìm được (0 P0).
 
-## PRODUCT DECISIONS
+## PRODUCT INVARIANTS CONFIRMED
 
-- Xây `Tapdoanytedalinhvuc` greenfield, `ZenithTasks` read-only legacy
-  source. Không copy nguyên file, không rewrite mù quáng — salvage có chọn
-  lọc (xem Salvage Ledger).
-- Company ≠ Project là invariant trung tâm (ADR-003) — sai lầm lớn nhất của
-  ZenithTasks phải sửa ngay từ domain model, không vá tiếp.
-- Healthcare/Clinic là vertical đầu tiên, không phải toàn sản phẩm (ADR-004).
+Company ≠ Project (ADR-003/008) · Company ≠ Branch (ADR-010) · Ecosystem ≠
+toàn database (ADR-007) · User ≠ Role (ADR-009) · Position ≠ Permission ·
+Project ≠ chủ sổ Ledger · Healthcare ≠ Product Core (ADR-004) · AI Scope ≠
+Client input — cả 8 ranh giới này đã được red-team cố tình tấn công và xác
+nhận vững (4/8 không tìm được gap; 4/8 tìm được gap nhỏ, **đã sửa hết**).
 
-## ARCHITECTURE DECISIONS
+## DOMAIN MODEL
 
-ADR-001 (Greenfield repo) → ADR-006 (giữ stack Next.js/Prisma/Postgres) —
-đầy đủ trong `docs/architecture/DECISIONS.md`.
+Xem `docs/architecture/DOMAIN_MODEL.md`. Điểm mấu chốt sau khi sửa theo
+review: `Agent.scopeType` chỉ còn `ECOSYSTEM | COMPANY` (không phải 4 giá
+trị); `Company.type` chỉ còn `GENERAL | HEALTHCARE | OTHER`; `Company.status`
+có `DRAFT` dứt điểm; `Customer` không có cột `projectId` trực tiếp (chỉ qua
+`ProjectCustomer` tương lai); `Assignment` giữ lại với lý do cụ thể (kiêm
+nhiệm + lịch sử chuyển vị trí, không phải vì domain law trừu tượng).
 
-## SALVAGE FINDINGS (tóm tắt — chi tiết trong Legacy Capability Matrix)
+## DATA OWNERSHIP DECISIONS
 
-- AI Job engine V2 (`ZAiAgent`/`ZAiJob`, idempotency/approval/verify/audit,
-  worker thật) là tài sản kỹ thuật tốt nhất nhưng **xác nhận hiện tại (không
-  phải audit cũ)**: chưa có UI nào gọi được qua browser — chỉ chạy qua
-  integration test. Nguồn: ledger nội bộ MC-24 (BLOCKED) + VERSION.md bản
-  29/08 (mới nhất).
-- Phát hiện lỗ hổng thật, có trích dẫn code: `v2-access.ts`/
-  `v2-global-console-policy.ts` cho phép MỌI user có `Role.ADMIN` (role toàn
-  cục của hệ Clinic) bypass hoàn toàn kiểm tra `ZProjectMember` trên MỌI
-  "company" mô phỏng — đúng anti-pattern mà ADR-003 phải chặn.
-- **Mâu thuẫn tài liệu chưa giải quyết được dứt điểm**: `BAN-GIAO.md` nói V2
-  migration "chưa apply production"; `CHANGELOG.md` (cùng ngày 24/08, cập
-  nhật sát code hơn) nói đã bật `ENABLE_ZENITH_V2=true` và apply 56 migration
-  lên clinic. Ghi rõ trong Legacy Capability Matrix, **cần xác minh trực
-  tiếp lại** ở Phần 2/3, không tự ý chọn một phía.
-- 5 bug/gap cụ thể mới phát hiện (không có trong audit cũ, xác nhận hiện tại
-  30/08): 2 Command Palette đè Ctrl+K nhau, route `/phe-duyet` gãy (regression
-  từ commit 28/08, không phải nợ cũ), rò rỉ branding "ZenithTasks" ra UI,
-  double-revenue-count bug khi 1 người vừa consultant vừa doctor, và pattern
-  lỗi lặp lại "toolAllowlist khai báo nhưng dispatcher không xử lý" (đã xảy
-  ra ≥3 lần cùng 1 lớp lỗi).
+Xem `docs/architecture/DATA_OWNERSHIP.md`. Không có UNKNOWN ở core entity —
+chỉ còn UNKNOWN ở mức phân loại record `ZProject` cụ thể (việc của migration
+tooling Phần 10, không phải thiếu sót thiết kế).
+
+## TENANT SECURITY DECISIONS
+
+Xem `docs/architecture/TENANT_INVARIANTS.md` + `SECURITY_BOUNDARIES.md`.
+Hai quyết định mới quan trọng nhất sau review: (1) Composite FK/DB
+constraint **bắt buộc** (không phải "cân nhắc") cho Finance + Healthcare;
+(2) `FOUNDER`/`ECOSYSTEM_ADMIN` không tự động ghi được vào một Company cụ
+thể (kể cả qua AI) nếu không có `CompanyMembership` tường minh trên đúng
+Company đó — đây là ranh giới trực tiếp ngăn lặp lại lỗ hổng ADMIN-bypass
+thật đã tìm thấy ở ZenithTasks (Legacy Capability Matrix mục L-V01), dưới
+mọi hình dạng có thể tái xuất hiện (role trùng tên, AI ghi thay).
+
+## LEGACY MAPPING SUMMARY
+
+`docs/architecture/LEGACY_TO_TARGET_MAP.md` — cover đủ domain chính theo
+Master Prompt mục CXXXIII: Clinic, Multi-company V2, AI, Finance, Payroll,
+CRM, Work, Organization, Permissions, Approval, Audit.
+
+## ADRs CREATED
+
+ADR-007 (Ecosystem boundary) · ADR-008 (Project trong Company, không
+nullable) · ADR-009 (Identity tách Membership/Role) · ADR-010 (Organization
+trong Company, Branch ≠ tenant) · ADR-011 (Migration qua import/cutover).
+
+## OPEN ARCHITECTURE RISKS
+
+1. Composite FK cho Finance/Healthcare mới là quyết định nguyên tắc — thiết
+   kế schema Prisma cụ thể (kiểu constraint nào, có khả thi 100% với Prisma
+   hay cần raw SQL/trigger) chưa verify kỹ thuật, để Phần 3 làm spike nếu
+   cần (mục CXXV Architecture Spikes).
+2. Đánh giá PostgreSQL Row-Level Security (RLS) làm lớp phòng thủ thứ hai —
+   chưa quyết định dùng hay không, chỉ ghi nhận nên đánh giá ở Phần 3.
+3. Mâu thuẫn tài liệu về trạng thái migrate V2 production của ZenithTasks
+   (ghi từ Phần 1, chưa giải quyết, không ảnh hưởng Phần 2/3 vì
+   Tapdoanytedalinhvuc không đọc DB ZenithTasks ở giai đoạn này).
+
+## DECISIONS DEFERRED
+
+`Agent.scopeType` ORG_UNIT/PROJECT (chờ use case cụ thể + ADR riêng) ·
+`Company.type` AESTHETICS/DISTRIBUTION/SERVICE/RETAIL (chờ Company thật
+thuộc loại đó) · Cross-company Project collaboration (Lead Company +
+Participant Companies) · `ProjectCustomer` join table · Feature
+configuration primitives (xoá khỏi Platform list, thêm lại khi có driver cụ
+thể) · Assignment có thể defer nếu tới đầu Phần 3 vẫn chưa có workflow kiêm
+nhiệm/chuyển vị trí thật cần dùng.
 
 ## TESTS — RESULTS
 
-`npm run test` 1/1 PASS · `npx tsc --noEmit` 0 lỗi · `npx eslint .` 0
-lỗi/cảnh báo · `npx next build` PASS (3 route) · browser check `/api/health`
-+ `/` PASS (xem `docs/project/CURRENT_STATE.md`).
-
-## OPEN RISKS
-
-1. Mâu thuẫn tài liệu về trạng thái migrate V2 production của ZenithTasks
-   (xem trên) — chưa verify trực tiếp qua DB/`prisma migrate status` thật.
-2. `npm audit`: 3 lỗi high (dependency bắc cầu `deepmerge-ts` qua
-   `@prisma/config`, thuộc Prisma CLI 7.x) — theo dõi, không block.
-3. Double-revenue-count bug ở ZenithTasks (consultant=doctor cùng người)
-   đang dở dang fix — đừng salvage số liệu hoa hồng hiện tại làm ground
-   truth cho Phần 6.
-
-## BLOCKERS
-
-Không có HARD BLOCK theo định nghĩa Master Prompt (thiếu credential production,
-cần hành động irreversible, chi phí lớn, ambiguity dữ liệu tài chính/y tế
-nguy hiểm, quyết định pháp lý...). `git push` lên `origin/main` đã thực hiện
-thành công (credential Git sẵn có trên máy dù `gh auth status` báo chưa đăng
-nhập — 2 hệ thống xác thực khác nhau) — không có blocker về repository.
+Phần 2 không có test code (docs-only theo đúng phạm vi mục CXXIV). "Test"
+của Phần 2 là review đối kháng: 2/2 reviewer hoàn thành, 0 P0, 3 P1 + 5 P2
+tìm được và đã sửa hết — xem `docs/architecture/RED_TEAM_REVIEW.md` để có
+bảng đầy đủ câu hỏi/kết luận/mức độ.
 
 ## NEXT
 
-Phần 2 — Target Domain Architecture. Xem hướng dẫn resume chi tiết trong
-`docs/project/CURRENT_WAVE.md`.
+Phần 3 — Ecosystem + Company + Identity + Membership + Permission + Tenant
+Security Foundation. Đây là phase implement thật đầu tiên (Prisma schema,
+auth, enforcement code, negative test thật). Xem
+`docs/project/CURRENT_WAVE.md` để biết input đã sẵn sàng.
 
 ## DO NOT REDO
 
-Xem `PROJECT_STATE.json` mục `doNotRedo` — quan trọng nhất: đừng đọc lại
-toàn bộ 2 file DOCX gốc, đừng chạy lại workflow khảo cổ 5-agent trừ khi cần
-xác minh 1 claim cụ thể mới, đừng copy nguyên file ZenithTasks, đừng động
-vào ZenithTasks hoặc dữ liệu production của nó.
+- Không thiết kế lại Domain Model từ đầu — đã có, đã qua red-team.
+- Không thêm `Agent.scopeType` ORG_UNIT/PROJECT hay `Company.type` mới nếu
+  chưa có use case cụ thể + ADR (xem PROJECT_STATE.json mục doNotRedo).
+- Không để bất kỳ role nào (`FOUNDER`, `ECOSYSTEM_ADMIN`, hay tên tương lai
+  nào có vẻ "admin") tự động bypass `CompanyMembership` check khi ghi vào
+  một Company cụ thể — kể cả qua AI. Đây là bài học đắt giá nhất rút ra từ
+  toàn bộ Phần 1+2, đừng lặp lại dưới bất kỳ tên gọi mới nào ở Phần 3.

@@ -18,6 +18,21 @@ Cột **Legacy** chỉ còn ý nghĩa lịch sử/tương thích khi salvage t�
 | Decision / Cần quyết định | Việc cần con người phê duyệt, bất kể nguồn backend là gì | "Approval" (vẫn dùng nội bộ, nhưng user-facing ưu tiên "Cần quyết định") |
 | Approval | Cơ chế kỹ thuật cho một Decision cần duyệt | — |
 
+## Bổ sung sau Phần 2 (Target Domain Architecture)
+
+Chi tiết đầy đủ ở `docs/architecture/DOMAIN_MODEL.md`. Chốt thêm terminology:
+
+| Canonical | Nghĩa | Legacy (ZenithTasks) |
+|---|---|---|
+| OrganizationUnit | Branch/Department/Team/Function/Business Unit — cây tổ chức trong Company | `ZOrganizationUnit` |
+| Position | Chức danh tổ chức (VD "Bác sĩ Tim mạch"), KHÔNG phải quyền hệ thống | `ZProjectPosition` |
+| Assignment | Gán User giữ một Position trong Company | `ZProjectAssignment` (dead code ở legacy) |
+| Project | Mục tiêu có vòng đời, luôn thuộc một Company, không sở hữu Customer/Payroll/Ledger riêng | `ZProject` (một phần), Plan cũ không tương đương |
+| WorkItem | Một engine việc duy nhất cho Task công ty/phòng ban/dự án | `Plan`/`PlanTask` (legacy) + `ZWorkspaceTask` (V2) — hội tụ thành một |
+| Agent | AI có `scopeType` (ECOSYSTEM/COMPANY/ORG_UNIT/PROJECT) và `class` (ORCHESTRATOR/OPERATOR/SPECIALIST/WATCHER) — hai chiều độc lập | `ZAiAgent` (GLOBAL/CHILD — một chiều, gộp nhầm 2 khái niệm) |
+| Decision Inbox | Nơi user thấy mọi "Cần quyết định" hội tụ, bất kể nguồn lưu trữ vật lý nào | `PaymentRequest` (pattern gần nhất, salvage) |
+| rolePreset | Named permission package gắn với `EcosystemMembership`/`CompanyMembership` | `Role` enum global (Clinic) |
+
 ## Nguyên tắc dùng Glossary
 
 - Không để terminology trôi qua từng phiên — mỗi khi có khái niệm mới, thêm

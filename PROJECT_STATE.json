@@ -1,44 +1,55 @@
 {
   "project": "Tapdoanytedalinhvuc",
-  "phase": "part-1-complete",
-  "currentWave": "part-2-not-started",
+  "phase": "part-2-complete",
+  "currentWave": "part-3-not-started",
   "lastCheckpoint": "docs/checkpoints/LATEST.md",
   "legacySourceHead": "e420e3809b788f4f130db082dd798fe5e9e71b3a",
-  "targetHead": "3f316152ce51caf96cc14ce2255426f8d73feacd",
+  "targetHead": "PENDING_PART2_COMMIT",
   "completed": [
     "environment-recon",
     "target-repo-inspection",
     "legacy-repo-archaeology-5-agent-workflow",
     "read-master-prompt-part-1-full",
+    "read-master-prompt-part-2-full",
     "read-audit-doc-94-percent",
     "product-constitution",
     "product-vision",
     "glossary",
     "target-architecture-part1-level",
-    "architecture-decisions-adr-001-to-006",
+    "architecture-decisions-adr-001-to-011",
     "legacy-capability-matrix",
     "salvage-ledger",
     "master-roadmap",
     "session-protocol",
     "claude-md",
     "minimal-technical-bootstrap-nextjs-prisma-postgres-vitest",
-    "smoke-test-verified-browser-and-vitest"
+    "smoke-test-verified-browser-and-vitest",
+    "part2-domain-model",
+    "part2-data-ownership-matrix",
+    "part2-tenant-invariants",
+    "part2-security-boundaries",
+    "part2-legacy-to-target-map",
+    "part2-adversarial-red-team-and-simplicity-review",
+    "part2-fixes-applied-3-p1-and-5-p2-findings"
   ],
   "inProgress": [],
   "blocked": [],
   "next": [
-    "part-2-target-domain-architecture",
-    "part-2-read-master-prompt-lines-3615-7793",
-    "part-2-design-ecosystem-company-schema",
-    "part-2-tenant-boundary-decision",
-    "part-2-migration-contracts"
+    "part-3-ecosystem-company-identity-permission-foundation",
+    "part-3-read-master-prompt-from-line-7794",
+    "part-3-implement-user-ecosystem-company-membership-schema-in-prisma",
+    "part-3-implement-authorization-enforcement-per-tenant-invariants",
+    "part-3-negative-tests-for-ecosystem-admin-and-ai-cross-company-write"
   ],
   "doNotRedo": [
     "do-not-re-read-full-docx-files-again-use-docs-summaries",
     "do-not-re-run-5-agent-archaeology-workflow-unless-verifying-specific-new-claim",
     "do-not-copy-zenithtasks-files-verbatim",
-    "do-not-build-business-domain-models-until-part-2-3-design-is-explicit",
     "do-not-modify-zenithtasks-repo",
-    "do-not-migrate-or-touch-zenithtasks-production-data"
+    "do-not-migrate-or-touch-zenithtasks-production-data",
+    "do-not-implement-full-database-schema-in-part-2-thats-what-part-3-is-for-already-done-correctly",
+    "do-not-let-ecosystem-admin-or-founder-role-alone-bypass-companymembership-check-when-writing-to-a-specific-company",
+    "do-not-add-agent-scopeType-orgunit-or-project-without-a-concrete-example-and-an-adr",
+    "do-not-add-company-type-values-beyond-general-healthcare-other-without-a-real-company-of-that-type"
   ]
 }

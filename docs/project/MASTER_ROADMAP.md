@@ -8,8 +8,8 @@ khi bắt đầu Phần đó (token economy).
 
 | Phần | Nội dung | Trạng thái |
 |---|---|---|
-| 1 | Product Genesis + Repository Archaeology + Project Memory | ĐANG THỰC HIỆN |
-| 2 | Target Domain Architecture + Data Ownership + Tenant Boundaries + Migration Contracts | Chưa bắt đầu |
+| 1 | Product Genesis + Repository Archaeology + Project Memory | HOÀN TẤT |
+| 2 | Target Domain Architecture + Data Ownership + Tenant Boundaries + Migration Contracts | HOÀN TẤT |
 | 3 | Ecosystem + Company + Identity + Membership + Permissions | Chưa bắt đầu |
 | 4 | Organization + Work Core + Project | Chưa bắt đầu |
 | 5 | CRM + Sales + Generic Operations | Chưa bắt đầu |
