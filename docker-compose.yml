@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tapdoan
+      POSTGRES_PASSWORD: tapdoan_dev_only
+      POSTGRES_DB: tapdoanytedalinhvuc_dev
+    ports:
+      - "5442:5432"
+    volumes:
+      - tapdoan_pg_data:/var/lib/postgresql/data
+
+volumes:
+  tapdoan_pg_data:

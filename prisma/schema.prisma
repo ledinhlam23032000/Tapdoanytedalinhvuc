@@ -1,0 +1,18 @@
+// Minimal Phase-1 technical bootstrap schema.
+// KHÔNG thêm domain model (Ecosystem/Company/...) ở đây — đó là Phần 2/3.
+// HealthCheck chỉ tồn tại để chứng minh pipeline schema -> migrate -> client -> query chạy được.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model HealthCheck {
+  id        String   @id @default(cuid())
+  status    String   @default("ok")
+  checkedAt DateTime @default(now())
+}

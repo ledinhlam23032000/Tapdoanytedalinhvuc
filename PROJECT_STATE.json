@@ -1,0 +1,46 @@
+{
+  "project": "Tapdoanytedalinhvuc",
+  "phase": "part-1-complete",
+  "currentWave": "part-2-not-started",
+  "lastCheckpoint": "docs/checkpoints/LATEST.md",
+  "legacySourceHead": "e420e3809b788f4f130db082dd798fe5e9e71b3a",
+  "targetHead": "PENDING_FIRST_COMMIT",
+  "completed": [
+    "environment-recon",
+    "target-repo-inspection",
+    "legacy-repo-archaeology-5-agent-workflow",
+    "read-master-prompt-part-1-full",
+    "read-audit-doc-94-percent",
+    "product-constitution",
+    "product-vision",
+    "glossary",
+    "target-architecture-part1-level",
+    "architecture-decisions-adr-001-to-006",
+    "legacy-capability-matrix",
+    "salvage-ledger",
+    "master-roadmap",
+    "session-protocol",
+    "claude-md",
+    "minimal-technical-bootstrap-nextjs-prisma-postgres-vitest",
+    "smoke-test-verified-browser-and-vitest"
+  ],
+  "inProgress": [],
+  "blocked": [
+    "git-push-to-origin-needs-gh-auth-or-git-credential-setup"
+  ],
+  "next": [
+    "part-2-target-domain-architecture",
+    "part-2-read-master-prompt-lines-3615-7793",
+    "part-2-design-ecosystem-company-schema",
+    "part-2-tenant-boundary-decision",
+    "part-2-migration-contracts"
+  ],
+  "doNotRedo": [
+    "do-not-re-read-full-docx-files-again-use-docs-summaries",
+    "do-not-re-run-5-agent-archaeology-workflow-unless-verifying-specific-new-claim",
+    "do-not-copy-zenithtasks-files-verbatim",
+    "do-not-build-business-domain-models-until-part-2-3-design-is-explicit",
+    "do-not-modify-zenithtasks-repo",
+    "do-not-migrate-or-touch-zenithtasks-production-data"
+  ]
+}
