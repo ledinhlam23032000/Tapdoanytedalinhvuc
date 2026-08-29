@@ -4,7 +4,7 @@
   "currentWave": "part-2-not-started",
   "lastCheckpoint": "docs/checkpoints/LATEST.md",
   "legacySourceHead": "e420e3809b788f4f130db082dd798fe5e9e71b3a",
-  "targetHead": "PENDING_FIRST_COMMIT",
+  "targetHead": "3f316152ce51caf96cc14ce2255426f8d73feacd",
   "completed": [
     "environment-recon",
     "target-repo-inspection",
