@@ -83,15 +83,11 @@ lỗi/cảnh báo · `npx next build` PASS (3 route) · browser check `/api/heal
 
 ## OPEN RISKS
 
-1. `gh` CLI chưa đăng nhập trên máy này → **chưa thể `git push`** lên
-   `origin` của Tapdoanytedalinhvuc dù đã commit local. Cần chủ dự án chạy
-   `gh auth login` hoặc cấu hình credential khác trước khi phiên sau có thể
-   push.
-2. Mâu thuẫn tài liệu về trạng thái migrate V2 production của ZenithTasks
+1. Mâu thuẫn tài liệu về trạng thái migrate V2 production của ZenithTasks
    (xem trên) — chưa verify trực tiếp qua DB/`prisma migrate status` thật.
-3. `npm audit`: 3 lỗi high (dependency bắc cầu `deepmerge-ts` qua
+2. `npm audit`: 3 lỗi high (dependency bắc cầu `deepmerge-ts` qua
    `@prisma/config`, thuộc Prisma CLI 7.x) — theo dõi, không block.
-4. Double-revenue-count bug ở ZenithTasks (consultant=doctor cùng người)
+3. Double-revenue-count bug ở ZenithTasks (consultant=doctor cùng người)
    đang dở dang fix — đừng salvage số liệu hoa hồng hiện tại làm ground
    truth cho Phần 6.
 
@@ -99,8 +95,9 @@ lỗi/cảnh báo · `npx next build` PASS (3 route) · browser check `/api/heal
 
 Không có HARD BLOCK theo định nghĩa Master Prompt (thiếu credential production,
 cần hành động irreversible, chi phí lớn, ambiguity dữ liệu tài chính/y tế
-nguy hiểm, quyết định pháp lý...). Việc thiếu `gh auth` chỉ chặn PUSH, không
-chặn tiếp tục làm việc/commit local — đã ghi rõ, không dừng autopilot.
+nguy hiểm, quyết định pháp lý...). `git push` lên `origin/main` đã thực hiện
+thành công (credential Git sẵn có trên máy dù `gh auth status` báo chưa đăng
+nhập — 2 hệ thống xác thực khác nhau) — không có blocker về repository.
 
 ## NEXT
 

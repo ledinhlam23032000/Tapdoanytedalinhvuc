@@ -25,9 +25,7 @@
     "smoke-test-verified-browser-and-vitest"
   ],
   "inProgress": [],
-  "blocked": [
-    "git-push-to-origin-needs-gh-auth-or-git-credential-setup"
-  ],
+  "blocked": [],
   "next": [
     "part-2-target-domain-architecture",
     "part-2-read-master-prompt-lines-3615-7793",
