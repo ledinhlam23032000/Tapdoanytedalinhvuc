@@ -11,7 +11,7 @@ khi bắt đầu Phần đó (token economy).
 | 1 | Product Genesis + Repository Archaeology + Project Memory | HOÀN TẤT |
 | 2 | Target Domain Architecture + Data Ownership + Tenant Boundaries + Migration Contracts | HOÀN TẤT |
 | 3 | Ecosystem + Company + Identity + Membership + Permissions | HOÀN TẤT |
-| 4 | Organization + Work Core + Project | Chưa bắt đầu |
+| 4 | Organization + Work Core + Project | HOÀN TẤT |
 | 5 | CRM + Sales + Generic Operations | Chưa bắt đầu |
 | 6 | Finance + Payroll + Commission + Inventory | Chưa bắt đầu |
 | 7 | Healthcare Vertical + Legacy Clinic Parity | Chưa bắt đầu |

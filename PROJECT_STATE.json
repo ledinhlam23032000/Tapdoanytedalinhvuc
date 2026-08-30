@@ -1,10 +1,10 @@
 {
   "project": "Tapdoanytedalinhvuc",
-  "phase": "part-3-complete",
-  "currentWave": "part-4-not-started",
+  "phase": "part-4-complete",
+  "currentWave": "part-5-not-started",
   "lastCheckpoint": "docs/checkpoints/LATEST.md",
   "legacySourceHead": "e420e3809b788f4f130db082dd798fe5e9e71b3a",
-  "targetHead": "1fd74e2",
+  "targetHead": "PENDING_SEE_GIT_LOG",
   "completed": [
     "part1-product-genesis-archaeology-memory",
     "part2-target-domain-architecture",
@@ -21,17 +21,40 @@
     "part3-anti-pattern-search-clean",
     "part3-adversarial-code-review-pass-2-p2-fixed",
     "part3-browser-golden-path-verified",
-    "part3-fresh-db-install-test-verified"
+    "part3-fresh-db-install-test-verified",
+    "part4-prisma-schema-organizationunit-position-assignment-workitem-project-projectmembership",
+    "part4-organization-service-unit-position-assignment",
+    "part4-work-service-create-assign-start-complete-cancel-adr015-visibility",
+    "part4-work-priority-today-ranking-timezone-aware-unit-tested",
+    "part4-project-service-create-update-member-complete-archive",
+    "part4-scope-guards-shared-cross-company-fk-assertions",
+    "part4-permission-registry-presets-organization-people-work-project",
+    "part4-server-actions-organization-work-project",
+    "part4-ui-today-work-organization-projects-project-detail",
+    "part4-company-nav-updated-with-part4-sections",
+    "part4-unit-tests-21-pass",
+    "part4-integration-tests-tenant-isolation-part4-29-new-53-total-pass",
+    "part4-anti-pattern-search-clean",
+    "part4-adversarial-code-review-2-agents-1-p1-found-and-fixed-3-p2-fixed",
+    "part4-p1-fix-suspended-company-was-not-blocking-updateproject-addprojectmember-completeproject",
+    "part4-p2-fix-deduped-assert-helpers-into-scope-guards",
+    "part4-p2-fix-editprojectform-closes-dead-ui-path-for-project-fields",
+    "part4-p2-fix-work-table-mayact-now-matches-canactonworkitem-creator-branch",
+    "part4-bugfix-part3-add-member-form-currenttarget-null-after-await",
+    "part4-domain-docs-organization-work-core-project",
+    "part4-architecture-docs-updated-target-architecture-domain-model-data-ownership-tenant-invariants-legacy-to-target-map-salvage-ledger",
+    "part4-red-team-review-doc-security-red-team-code-review-part4",
+    "part4-browser-journeys-verified-employee-manager-project-owner",
+    "part4-fresh-db-install-test-verified"
   ],
   "inProgress": [],
   "blocked": [],
   "next": [
-    "part-4-work-organization-project-foundation",
-    "part-4-read-master-prompt-lines-12364-16745",
-    "part-4-implement-organizationunit-position-assignment-schema",
-    "part-4-implement-project-projectmembership-schema",
-    "part-4-implement-workitem-work-core-schema",
-    "part-4-open-work-permission-namespace-checks"
+    "part-5-crm-sales-generic-operations",
+    "part-5-read-master-prompt-part-5-section-via-pandoc-grep",
+    "part-5-implement-customer-appointment-sale-schema",
+    "part-5-open-customer-permission-namespace-checks",
+    "part-5-decide-whether-appointment-follow-up-generates-workitem-automatically-or-stays-separate"
   ],
   "doNotRedo": [
     "do-not-re-read-full-docx-files-again-use-docs-summaries",
@@ -44,6 +67,11 @@
     "do-not-add-company-type-values-beyond-general-healthcare-other-without-a-real-company-of-that-type",
     "do-not-redesign-authorization-foundation-already-done-tested-red-teamed",
     "do-not-write-any-role-name-comparison-outside-permissions-registry-resolver-presets-files",
-    "do-not-create-organizationunit-position-assignment-project-workitem-prisma-models-before-part-4-starts"
+    "do-not-add-organizationunitid-field-to-position-position-is-a-company-wide-template-adr-013",
+    "do-not-create-a-second-workitem-like-engine-for-project-or-any-other-domain-adr-014",
+    "do-not-let-project-owner-membership-grant-company-wide-permissions-project-archive-work-assign-etc-stay-scoped-to-that-project-only",
+    "do-not-gate-a-mutation-function-on-a-permission-that-is-in-read-only-permissions-in-company-context-ts-without-adding-an-explicit-assertcompanywritable-style-check-see-part4-p1-fix",
+    "do-not-access-e-currenttarget-after-an-await-inside-a-form-onsubmit-handler-capture-const-form-e-currenttarget-before-the-async-closure",
+    "do-not-give-project-a-customer-ledger-payroll-model-or-its-own-authorization-root-project-is-not-company-see-docs-domain-project-md"
   ]
 }

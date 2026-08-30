@@ -1,5 +1,19 @@
 # Domain Model (Phần 2)
 
+## Cập nhật Phần 4 — Organization/Project/Work Core đã implement thật
+
+Ba mục "Organization", "Project", "Work Core" bên dưới là conceptual draft
+Phần 2 — đã implement đúng như mô tả ở Phần 4, với các delta cụ thể: field
+`orgUnitId` trong draft này trở thành `organizationUnitId` trong schema thật
+(rõ nghĩa hơn); `Position` không có `orgUnitId?` (đúng như draft đã dự
+đoán — "nếu ... chưa có ai thật sự cần kiêm nhiệm/lịch sử vị trí, được phép
+defer Assignment" đã KHÔNG xảy ra — Assignment implement ngay vì nhu cầu
+kiêm nhiệm/chuyển chi nhánh có ví dụ thật từ Bệnh viện Hồng Phúc); `Project`
+có thêm `owningUnitId?`/`budgetAmount?` (không có trong draft, thêm vì mục
+CVII Master Prompt yêu cầu Project gắn được với 1 đơn vị chủ quản). Chi tiết
+implementation, lý do quyết định, invariant giữ nguyên: `docs/domain/
+ORGANIZATION.md`, `docs/domain/WORK_CORE.md`, `docs/domain/PROJECT.md`.
+
 Conceptual schema draft — KHÔNG phải Prisma schema thật (Phần 2 không implement
 full database, xem `docs/project/CURRENT_WAVE.md`). Mục đích: chứng minh
 ownership, cardinality, scope, lifecycle. Field list là tối thiểu cần thiết,

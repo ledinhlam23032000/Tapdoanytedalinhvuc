@@ -95,8 +95,17 @@ export async function requireCompanyContextForActor(
   return ctx;
 }
 
+const READ_ONLY_PERMISSIONS: ReadonlySet<CompanyPermission> = new Set([
+  "company.view",
+  "company.members.view",
+  "organization.view",
+  "people.view",
+  "work.view",
+  "project.view",
+]);
+
 function isWriteAction(permission: CompanyPermission): boolean {
-  return permission !== "company.view" && permission !== "company.members.view";
+  return !READ_ONLY_PERMISSIONS.has(permission);
 }
 
 /** Danh sách Company mà actor có thể thấy — server-filtered (mục LXII/CXXVIII), không fetch-all-rồi-lọc-client. */

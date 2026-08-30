@@ -24,7 +24,8 @@ export function AddMemberForm({ companyId, actorIsOwner }: { companyId: string; 
       className="flex flex-wrap items-end gap-3 rounded-md border border-zinc-200 bg-white p-4"
       onSubmit={(e) => {
         e.preventDefault();
-        const formData = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const formData = new FormData(form);
         setError(null);
         startTransition(async () => {
           try {
@@ -33,7 +34,7 @@ export function AddMemberForm({ companyId, actorIsOwner }: { companyId: string; 
               email: String(formData.get("email") ?? ""),
               rolePreset: formData.get("rolePreset") as CompanyRolePreset,
             });
-            e.currentTarget.reset();
+            form.reset();
             router.refresh();
           } catch (err) {
             setError(err instanceof Error ? err.message : "Không thể thêm thành viên.");

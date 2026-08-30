@@ -30,6 +30,13 @@ Cột theo Master Prompt mục CIII. "Cross-company Allowed?" mặc định **No
 | Notification | Notification | theo target User + scope nguồn | — | No (mục CVII — không leak) | Auto-expire | Trung bình | Thấp | (chưa có ở legacy tương đương rõ) | NEW (Phần 9) |
 | File | File metadata | Company (hoặc Ecosystem cho tài liệu nền tảng) | Entity liên quan (Case, Project...) | No | Archive theo entity cha | Cao (đặc biệt clinical) | Có (access log) | `Photo`, `CaseDocument`, uploads | KEEP_CONCEPT (metadata + storage provider abstraction, không lưu binary lớn trong DB — đã đúng ở legacy) |
 
+## Cập nhật Phần 4
+
+Các dòng Organization/Project/Work ở trên đã implement đúng ownership scope
+đã ghi (Company là owner, OrgUnit/Project là optional attribution) — không
+có delta. Xem `docs/domain/ORGANIZATION.md`/`WORK_CORE.md`/`PROJECT.md` cho
+chi tiết thật.
+
 ## Ghi chú UNKNOWN (không có ở core entity quan trọng — quality gate CXXX)
 
 Không có UNKNOWN ở core entity (Ecosystem/Company/Membership/Organization/

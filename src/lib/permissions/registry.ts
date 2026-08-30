@@ -23,6 +23,21 @@ export const COMPANY_PERMISSIONS = [
   "company.manage",
   "company.members.view",
   "company.members.manage",
+  // Phần 4 — Organization + Work Core + Project (mục XCVIII Master Prompt)
+  "organization.view",
+  "organization.manage",
+  "people.view",
+  "people.assign",
+  "work.view",
+  "work.create",
+  "work.update",
+  "work.assign",
+  "work.complete",
+  "work.manage",
+  "project.view",
+  "project.create",
+  "project.manage",
+  "project.archive",
 ] as const;
 
 export type EcosystemPermission = (typeof ECOSYSTEM_PERMISSIONS)[number];
@@ -37,10 +52,10 @@ export function canGrantOwnerRole(actorRolePreset: string | undefined): boolean 
   return actorRolePreset === "OWNER";
 }
 
-// Reserved namespace cho domain tương lai (Part 4+) — CHỈ khai báo tên, KHÔNG
+// Reserved namespace cho domain tương lai (Part 5+) — CHỈ khai báo tên, KHÔNG
 // implement check nào cho tới khi domain đó thực sự tồn tại (mục CCXXVI).
+// "work." đã chuyển sang COMPANY_PERMISSIONS thật ở Phần 4 — bỏ khỏi reserved.
 export const RESERVED_PERMISSION_PREFIXES = [
-  "work.",
   "customer.",
   "finance.",
   "payroll.",

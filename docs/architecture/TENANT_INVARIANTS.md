@@ -91,6 +91,22 @@ THEN  KHÔNG tự động có — Position không cấp quyền hệ thống, ch
       permissionPackRef tường minh mới cấp
 ```
 
+## Cập nhật Phần 4 — mở rộng acceptance test sang Organization/Work/Project
+
+Nguyên tắc nền 1-5 và toàn bộ threat model ở trên áp dụng nguyên vẹn cho
+`OrganizationUnit`/`Position`/`Assignment`/`WorkItem`/`Project`/
+`ProjectMembership` — không có ngoại lệ nào cho domain mới. Acceptance test
+thật (không chỉ hình thức) nằm ở
+`src/lib/__tests__/tenant-isolation-part4.itest.ts`, bao gồm: cross-company
+FK injection (parentId Unit, positionId, organizationUnitId, projectId,
+assigneeUserId, owningUnitId — mỗi FK đều bị chặn nếu trỏ sang Company khác),
+gán Assignment/WorkItem cho người không phải `CompanyMembership` ACTIVE
+đúng Company, ID injection trực tiếp lên WorkItem/Project biết trước từ
+Company khác, Suspended Company chặn ghi mới ở cả 3 domain, và ranh giới
+riêng của Phần 4: Project OWNER-membership (per-project) không tự mở rộng
+thành quyền cấp Company (`project.archive`/`work.assign`) — xem
+`docs/domain/PROJECT.md`.
+
 ## Không lặp lại (đối chiếu trực tiếp bằng chứng từ Legacy Capability Matrix)
 
 - `v2-access.ts`: `user.role === "ADMIN"` bypass toàn bộ `ZProjectMember`

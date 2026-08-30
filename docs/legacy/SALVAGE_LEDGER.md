@@ -19,6 +19,25 @@ như `AuditLog` của ZenithTasks — hiện chỉ dựa vào việc không có 
 nếu audit trail cần chống cả truy cập trực tiếp SQL (ghi vào
 `docs/checkpoints/LATEST.md` mục Open Risks).
 
+## Cập nhật Phần 4
+
+`lib/workqueue.ts` ("Today Workqueue", dòng "suy việc từ dữ liệu sẵn có"
+trong bảng pattern bên dưới) đã salvage triết lý thật ở `src/lib/domain/
+work-priority.ts` (`getMyTodayWork()` + xếp hạng tier — xem
+`docs/domain/WORK_CORE.md`) — chưa viết interface `WorkSignalProvider` tổng
+quát (đúng như ghi chú gốc: đó là Phần 9, khi có nhiều nguồn signal hơn một
+danh sách WorkItem quá hạn/ưu tiên).
+
+**Open item chưa áp dụng ở Phần 4** (ghi lại để không quên, không phải
+blocker): pattern `useFormAction` (dòng "Server Action lưu dữ liệu..." bên
+dưới) chưa từng được extract thành hook dùng chung — kể cả Phần 3 lẫn Phần 4
+đều viết `useState`+`useTransition`+`router.refresh()` inline trong từng
+form component (`add-member-form.tsx`, `create-work-form.tsx`,
+`unit-form.tsx`, v.v.). Nhất quán với chính nó nên chưa gây bug, nhưng nếu
+số lượng form tiếp tục tăng ở Phần 5+, nên extract `useFormAction` thật lúc
+đó thay vì tiếp tục copy-paste — không làm ngay bây giờ vì chưa có bằng
+chứng trùng lặp đủ đau (mục CXXIX: không xây abstraction trước khi cần).
+
 ## Tuyệt đối KHÔNG copy (secrets — chỉ ghi path, không mở/không quote nội dung)
 
 Xác nhận có tồn tại trong `ZenithTasks` (path only, chưa từng mở):

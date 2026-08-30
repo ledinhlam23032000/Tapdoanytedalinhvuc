@@ -38,7 +38,13 @@ export default async function CompanyLayout({
           <button className="text-sm text-zinc-500 underline">Đăng xuất</button>
         </form>
       </header>
-      <CompanyNav code={ctx.company.code} canManageMembers={ctx.permissions.has("company.members.view")} />
+      <CompanyNav
+        code={ctx.company.code}
+        canManageMembers={ctx.permissions.has("company.members.view")}
+        canViewWork={ctx.permissions.has("work.view")}
+        canViewOrganization={ctx.permissions.has("organization.view")}
+        canViewProjects={ctx.permissions.has("project.view")}
+      />
       {children}
     </div>
   );

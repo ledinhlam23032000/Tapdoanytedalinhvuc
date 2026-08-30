@@ -3,10 +3,26 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function CompanyNav({ code, canManageMembers }: { code: string; canManageMembers: boolean }) {
+export function CompanyNav({
+  code,
+  canManageMembers,
+  canViewWork,
+  canViewOrganization,
+  canViewProjects,
+}: {
+  code: string;
+  canManageMembers: boolean;
+  canViewWork: boolean;
+  canViewOrganization: boolean;
+  canViewProjects: boolean;
+}) {
   const pathname = usePathname();
   const items = [
     { href: `/c/${code}`, label: "Tổng quan" },
+    ...(canViewWork ? [{ href: `/c/${code}/today`, label: "Hôm nay" }] : []),
+    ...(canViewWork ? [{ href: `/c/${code}/work`, label: "Công việc" }] : []),
+    ...(canViewProjects ? [{ href: `/c/${code}/projects`, label: "Dự án" }] : []),
+    ...(canViewOrganization ? [{ href: `/c/${code}/organization`, label: "Cơ cấu tổ chức" }] : []),
     ...(canManageMembers ? [{ href: `/c/${code}/members`, label: "Thành viên" }] : []),
   ];
 

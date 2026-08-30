@@ -185,3 +185,67 @@ vi các Ecosystem mà actor có quyền truy cập — nếu tương lai có nhi
 Ecosystem trùng code, đây là giới hạn đã biết, chấp nhận defer UX đa
 Ecosystem theo đúng mục CXXIV Master Prompt (xem
 `src/lib/authorization/company-context.ts`).
+
+## ADR-013 — Position là template cấp Company, không gắn cứng OrganizationUnit
+
+**Quyết định:** `Position` không có field `organizationUnitId`. Một Position
+(vd "Trưởng phòng Kinh doanh") là định nghĩa chức danh dùng chung cho cả
+Company, có thể áp dụng ở nhiều đơn vị khác nhau. Nơi một người *thực sự*
+giữ Position đó (đơn vị nào) nằm ở `Assignment.organizationUnitId`.
+
+**Vì sao:** Master Prompt Phần 4 mục CLXXIII đưa ra 2 model hợp lệ và yêu
+cầu chọn 1 kèm ADR. Model "Position gắn Unit" (vd "Trưởng phòng Kinh doanh —
+Hải Phòng") sẽ nhân bản Position theo từng đơn vị nếu chức danh lặp lại ở
+nhiều chi nhánh — đúng dạng trùng lặp mục CLXXII tự cảnh báo. Model template
+tránh nhân bản, và khớp tự nhiên với `Assignment` đã có sẵn field
+`organizationUnitId?` để trả lời "ai giữ vị trí gì, ở đâu, từ khi nào".
+
+**Hệ quả:** Tạo Position mới không cần chọn đơn vị. UI hỏi đơn vị khi tạo
+*Assignment* (gán người), không phải khi tạo Position.
+
+## ADR-014 — Một Work Core duy nhất (WorkItem), không tách theo nguồn gốc
+
+**Quyết định:** Toàn bộ "việc cần làm" trong Company — dù tạo bởi nhân viên,
+gắn với Project, gắn với Organization Unit, hay (tương lai) do AI đề xuất —
+đều là một dòng `WorkItem` duy nhất. Không tạo `ProjectTask`, `ClinicTask`,
+`AiTask` riêng.
+
+**Vì sao:** Đây chính là lỗi đã xảy ra thật ở ZenithTasks (`Plan`/`PlanTask`
+song song với `ZWorkspaceTask` — 2 engine việc không đồng bộ) và Master
+Prompt Phần 4 Law XXVI cấm tuyệt đối lặp lại. `Project`/`OrganizationUnit`
+chỉ là **attribution** optional trên `WorkItem` (`projectId?`,
+`organizationUnitId?`), không phải chủ sở hữu.
+
+**Hệ quả:** Phần 8 (AI) tạo việc qua cùng application command
+(`createWorkItem`) mà User dùng — không có pipeline việc riêng cho AI.
+
+## ADR-015 — Work visibility: MEMBER/VIEWER thấy việc của mình, MANAGER trở lên thấy toàn Company
+
+**Quyết định:** Không xây ACL theo từng `WorkItem`. Thay vào đó, tầng query
+áp dụng đúng 2 mức nhìn theo `CompanyMembership.rolePreset`: `MEMBER`/
+`VIEWER` chỉ thấy `WorkItem` mà họ là `assigneeUserId` hoặc
+`createdByUserId`; `MANAGER`/`COMPANY_ADMIN`/`OWNER` thấy toàn bộ Company
+(có phân trang).
+
+**Vì sao:** Master Prompt mục LXXXVIII-LXXXIX yêu cầu "không mặc định mọi
+Member thấy tất cả Company tasks" nhưng đồng thời cấm "tạo ACL per task
+ngay". Hai mức view (SELF / COMPANY) là mức tối giản thoả cả hai ràng buộc,
+không cần bảng phân quyền theo từng WorkItem.
+
+**Hệ quả:** "Hôm nay" (Today) luôn tự nhiên là SELF-scoped cho mọi role.
+Trang "Công việc" (danh sách đầy đủ) áp dụng rule 2 mức ở trên. Mở rộng mức
+UNIT (Manager chỉ thấy Unit của mình) là backlog hợp lệ, chưa cần Phần 4.
+
+## ADR-016 — Không implement Milestone ở Phần 4
+
+**Quyết định:** Không tạo model `ProjectMilestone` ở Phần 4. Tiến độ Project
+tính từ tỷ lệ `WorkItem` hoàn thành/tổng số (mục LXXXII cho phép cả 2 cách,
+chọn cách không cần model mới).
+
+**Vì sao:** Master Prompt mục CCXXXII (Simplicity Review) tự đặt câu hỏi "Do
+we need milestone now?" — chưa có use case cụ thể nào ở Company đầu tiên
+(Bệnh viện Đa khoa Hồng Phúc) đòi hỏi mốc project tách rời khỏi task. Thêm
+sau khi có nhu cầu thật rẻ hơn nhiều so với gánh một model không dùng.
+
+**Hệ quả:** `docs/domain/PROJECT.md` ghi rõ đây là DEFERRED, không phải bỏ
+sót — thêm lại khi Project thật cần mốc tiến độ tách biệt khỏi task.

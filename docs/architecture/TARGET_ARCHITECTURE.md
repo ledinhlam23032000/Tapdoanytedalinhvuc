@@ -1,5 +1,17 @@
 # Target Architecture
 
+## Cập nhật Phần 4 (Organization + Work Core + Project — IMPLEMENTED)
+
+Organization/Work Core/Project (mô tả conceptual bên dưới ở "Org Unit
+meaning"/"Project meaning") giờ đã implement thật, không còn chỉ hướng đi:
+`prisma/schema.prisma` (section "Phần 4"), `src/lib/domain/
+organization-service.ts`/`work-service.ts`/`project-service.ts`,
+`src/lib/domain/work-priority.ts`, UI dưới `src/app/c/[code]/{today,work,
+organization,projects}/`. Chi tiết + lý do quyết định:
+`docs/domain/ORGANIZATION.md`, `docs/domain/WORK_CORE.md`,
+`docs/domain/PROJECT.md` (đọc trước khi sửa 3 domain này). ADR-013 đến
+ADR-016 trong `DECISIONS.md`.
+
 ## Cập nhật Phần 2 (Target Domain Architecture — HOÀN TẤT)
 
 Phần này của tài liệu (bên dưới) là hướng đi chốt ở Phiên 1 — vẫn đúng, giữ

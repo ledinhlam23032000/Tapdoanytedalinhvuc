@@ -37,6 +37,20 @@ UNKNOWN) ở migration tooling thật (Phần 10), không đoán ở đây.
 | Healthcare models (`ConsultationRecord`, `CaseConsent`, `Photo` type CLINICAL, v.v.) | Healthcare Vertical (`MedicalCase`, `Consultation`, `Consent`, `ClinicalPhoto`, `MedicalFollowUp`) | KEEP_CONCEPT (giá trị nghiệp vụ rất lớn) | ADAPT (đổi companyId, giữ nguyên field y tế) | MIGRATE_DATA (toàn bộ, không rút gọn) | SALVAGE_TEST (`consultation-sheet.test.ts`) | ADAPT (UI Clinic hiện tại giữ tương đối nguyên vẹn giai đoạn đầu — strangler pattern, không big-bang) |
 | `ZAgentProfile`/`ZTrainingDataset`/`ZTrainingExample`/`ZPromptVersion`/`ZEvaluationRun` (AI Training Studio V3) | (tương lai, P5) | DEFER hoàn toàn | DEFER | KHÔNG migrate (chỉ demo seed, không có giá trị business) | DEFER | DEFER |
 
+## Cập nhật Phần 4 — trạng thái implement thật của các dòng Organization/Work
+
+Các dòng `ZOrganizationUnit`→`OrganizationUnit`, `ZProjectPosition`→
+`Position`, `ZProjectAssignment`→`Assignment`, `Plan`/`PlanTask` +
+`ZWorkspaceTask`→`WorkItem` ở bảng trên đã hoàn tất Physical Model (REWRITE/
+MERGE) ở Phần 4 — không còn "chưa implement". Data thật (`MIGRATE_DATA`) vẫn
+CHƯA chạy (chờ migration tooling Phần 10, đúng như Data đã ghi ở trên — Phần
+4 chỉ build physical model + service + UI mới, không di dữ liệu ZenithTasks
+thật vào Tapdoanytedalinhvuc). Test: `SALVAGE_TEST` cho `v2-write-denial.
+itest.ts`-style đã áp dụng thành `tenant-isolation-part4.itest.ts`. UI:
+`REWRITE` hoàn tất — `/c/[code]/organization`, `/c/[code]/work`, `/c/[code]/
+today`, `/c/[code]/projects` (trang `/to-chuc` legacy chỉ đọc, đã thay hoàn
+toàn bằng CRUD thật).
+
 ## Legacy Role Map (bổ sung Phần 3 — mục CIII-CVII)
 
 Legacy `Role` enum (10 giá trị, global trên `User`) KHÔNG map 1:1 vào
