@@ -4,7 +4,7 @@
   "currentWave": "part-4-not-started",
   "lastCheckpoint": "docs/checkpoints/LATEST.md",
   "legacySourceHead": "e420e3809b788f4f130db082dd798fe5e9e71b3a",
-  "targetHead": "PENDING_PART3_COMMIT",
+  "targetHead": "1fd74e2",
   "completed": [
     "part1-product-genesis-archaeology-memory",
     "part2-target-domain-architecture",
