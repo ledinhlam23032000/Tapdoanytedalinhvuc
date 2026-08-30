@@ -22,11 +22,24 @@ chatbot, không phải phần mềm một phòng khám. Chi tiết:
   push, KHÔNG sửa business behavior ở đây trừ khi Master Prompt cho phép rõ
   ràng. Chỉ đọc/search/chạy test khi an toàn.
 
+## Đã implement thật (Phần 3)
+
+`User` (identity) → `EcosystemMembership`/`CompanyMembership` (quyền) →
+`Ecosystem`/`Company` (Prisma models thật, migrated). Auth: JWT (jose) +
+bcrypt, cookie `tdytdlv_session`. Permission registry + resolver ở
+`src/lib/permissions/`. Company context resolve server-side ở
+`src/lib/authorization/`. Chi tiết: `docs/security/AUTHORIZATION_MODEL.md`.
+
 ## Invariant tuyệt đối
 
 - Company ≠ Project (sai lầm lớn nhất của ZenithTasks — xem
   `docs/architecture/DECISIONS.md` ADR-003).
 - Company A không mặc định thấy/ghi Company B.
+- **Không role Ecosystem-tier nào (FOUNDER, ECOSYSTEM_ADMIN, hay tên mới
+  sau này) tự động ghi được vào một Company cụ thể** — phải có
+  `CompanyMembership` tường minh trên đúng Company đó, kể cả khi ghi qua AI.
+  Đây là bài học đắt giá nhất từ ZenithTasks (`user.role === "ADMIN"` bypass
+  `ZProjectMember`) — xem `docs/architecture/TENANT_INVARIANTS.md`.
 - Không tạo V2/V3/V4 song song trong app mới.
 - Search before create — luôn search cả hai repo trước khi viết model/
   service/component mới.

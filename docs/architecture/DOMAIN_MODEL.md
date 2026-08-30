@@ -129,7 +129,7 @@ Company
   currency
   timezone
   createdAt / updatedAt
-  @@unique(ecosystemId, code)   // ADR-008: unique trong Ecosystem, không global
+  @@unique(ecosystemId, code)   // ADR-012: unique trong Ecosystem, không global
 
 CompanyMembership
   id

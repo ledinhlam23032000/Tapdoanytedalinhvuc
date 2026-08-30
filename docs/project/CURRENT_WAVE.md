@@ -1,38 +1,40 @@
 # Current Wave
 
-**Phần 2 — Target Domain Architecture + Data Ownership + Tenant Boundaries +
-Migration Contracts: HOÀN TẤT** (đã qua red-team + simplicity review đối
-kháng, tất cả P1/P2 tìm được đã sửa — xem `docs/architecture/RED_TEAM_REVIEW.md`).
+**Phần 3 — Ecosystem + Company + Identity + Membership + Permission +
+Tenant Security Foundation: HOÀN TẤT.** Implementation thật (không chỉ
+docs): Prisma schema, auth, permission resolver, Company lifecycle, minimal
+UI, 24 integration test PASS, adversarial code review PASS (0 P0/P1, 2 P2
+đã sửa) — xem `docs/checkpoints/LATEST.md`.
 
-**Tiếp theo: Phần 3 — Ecosystem + Company + Identity + Membership +
-Permission + Tenant Security Foundation.** Đây là phase bắt đầu implement
-thật (Prisma schema thật, auth, enforcement code) — không còn chỉ là docs.
+**Tiếp theo: Phần 4 — Work + Organization + Project Foundation.**
 
-Trước khi bắt đầu Phần 3, đọc đúng đoạn tương ứng trong
-`MASTER PROMPT — TAPDOANYTEDALINHVUC.docx` (bắt đầu từ dòng ~7794, "PART 3
---- ECOSYSTEM + COMPANY + IDENTITY + PERMISSION FOUNDATION"). Nếu file convert
-`master_prompt.md` trong scratchpad không còn, convert lại bằng
+Trước khi bắt đầu Phần 4, đọc đúng đoạn tương ứng trong
+`MASTER PROMPT — TAPDOANYTEDALINHVUC.docx` (bắt đầu từ dòng ~12364, "PART 4
+--- WORK + ORGANIZATION + PROJECT FOUNDATION", tới trước "PHẦN 5" khoảng
+dòng ~16745). Nếu file convert `master_prompt.md` trong scratchpad không
+còn, convert lại bằng
 `pandoc -t markdown "MASTER PROMPT — TAPDOANYTEDALINHVUC.docx" -o master_prompt.md`
-rồi `grep -n "PART 3\|PART 4"` để định vị lại range.
+rồi `grep -n "PART 4\|PHẦN 5"` để định vị lại range.
 
-## Input đã sẵn sàng cho Phần 3 (không cần thiết kế lại từ đầu)
+## Input đã sẵn sàng cho Phần 4
 
-- `docs/architecture/DOMAIN_MODEL.md` — schema conceptual đầy đủ, đã qua
-  red-team review, đã sửa xong mọi gap tìm được.
-- `docs/architecture/TENANT_INVARIANTS.md` — acceptance test bắt buộc phải
-  có code thật tương ứng ở Phần 3. **Đặc biệt chú ý 2 điểm mới chốt sau
-  review**: (1) `ECOSYSTEM_ADMIN`/`FOUNDER` không tự động ghi được vào một
-  Company cụ thể nếu không có `CompanyMembership` tường minh trên Company đó
-  — kể cả khi ghi qua AI; (2) composite FK/DB constraint là **bắt buộc**
-  (không tuỳ chọn) cho quan hệ cross-entity trong Finance và Healthcare.
-- `docs/architecture/SECURITY_BOUNDARIES.md`, `docs/architecture/DATA_OWNERSHIP.md`.
-- `docs/architecture/LEGACY_TO_TARGET_MAP.md` — mapping model-by-model, biết
-  ngay ZenithTasks nào KEEP/REMAP/RETIRE/MERGE.
-- ADR-001 đến ADR-011 trong `docs/architecture/DECISIONS.md`.
+- `docs/architecture/DOMAIN_MODEL.md` mục Organization/Project/Work Core —
+  schema conceptual đã có sẵn (`OrganizationUnit`, `Position`, `Assignment`,
+  `Project`, `ProjectMembership`, `WorkItem`).
+- `src/lib/authorization/company-context.ts` — `AuthorizedCompanyContext`
+  đã có sẵn, Phần 4 build domain mới TRÊN nền này, không viết lại
+  authorization.
+- `src/lib/permissions/registry.ts` — reserved prefix `work.` sẵn sàng mở
+  permission thật khi Work Core tồn tại (mục CCXXVI Master Prompt: chỉ
+  implement check khi domain đã có).
+- `docs/architecture/LEGACY_TO_TARGET_MAP.md` mục Legacy Role Map — đã
+  phân loại DOCTOR/NURSE/TELESALE/... là PROFESSIONAL ROLE → `Position`,
+  input trực tiếp cho thiết kế `Position`/`Assignment` thật ở Phần 4.
 
-## Việc CHƯA làm ở Phần 2 (đúng phạm vi, không phải thiếu sót)
+## Việc CHƯA làm ở Phần 3 (đúng phạm vi, không phải thiếu sót)
 
-Không có Prisma schema thật nào ngoài `HealthCheck` bootstrap của Phần 1 —
-Phần 2 chỉ là conceptual design (đúng theo mục CXXIV Master Prompt: "KHÔNG
-IMPLEMENT FULL DATABASE"). Phần 3 mới bắt đầu viết schema Ecosystem/Company/
-Membership thật + auth + enforcement.
+Position/Assignment/OrganizationUnit/Project/WorkItem — mới có ở
+DOMAIN_MODEL.md conceptual, CHƯA có trong `prisma/schema.prisma` (mục
+CCXXIII-CCXXV Master Prompt Phần 3: cố tình không tạo trước — "Do not
+create Task/Project/Organization foundation in Part 3. Part 4."). Sinh viên
+kế tiếp không cần lo đây là bug.

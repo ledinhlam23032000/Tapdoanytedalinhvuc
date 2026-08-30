@@ -1,14 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 
-describe("Phase 1 technical bootstrap smoke test", () => {
-  it("connects to Postgres via Prisma and round-trips a row", async () => {
-    const row = await db.healthCheck.create({ data: {} });
-    expect(row.status).toBe("ok");
-
-    const found = await db.healthCheck.findUnique({ where: { id: row.id } });
-    expect(found?.id).toBe(row.id);
-
-    await db.healthCheck.delete({ where: { id: row.id } });
+describe("Technical bootstrap smoke test", () => {
+  it("connects to Postgres via Prisma", async () => {
+    const rows = await db.$queryRaw<{ ok: number }[]>`SELECT 1 as ok`;
+    expect(rows[0].ok).toBe(1);
   });
 });

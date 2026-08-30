@@ -37,6 +37,30 @@ UNKNOWN) ở migration tooling thật (Phần 10), không đoán ở đây.
 | Healthcare models (`ConsultationRecord`, `CaseConsent`, `Photo` type CLINICAL, v.v.) | Healthcare Vertical (`MedicalCase`, `Consultation`, `Consent`, `ClinicalPhoto`, `MedicalFollowUp`) | KEEP_CONCEPT (giá trị nghiệp vụ rất lớn) | ADAPT (đổi companyId, giữ nguyên field y tế) | MIGRATE_DATA (toàn bộ, không rút gọn) | SALVAGE_TEST (`consultation-sheet.test.ts`) | ADAPT (UI Clinic hiện tại giữ tương đối nguyên vẹn giai đoạn đầu — strangler pattern, không big-bang) |
 | `ZAgentProfile`/`ZTrainingDataset`/`ZTrainingExample`/`ZPromptVersion`/`ZEvaluationRun` (AI Training Studio V3) | (tương lai, P5) | DEFER hoàn toàn | DEFER | KHÔNG migrate (chỉ demo seed, không có giá trị business) | DEFER | DEFER |
 
+## Legacy Role Map (bổ sung Phần 3 — mục CIII-CVII)
+
+Legacy `Role` enum (10 giá trị, global trên `User`) KHÔNG map 1:1 vào
+`CompanyRolePreset`. Phân loại theo 5 nhóm ngữ nghĩa (mục CIII):
+
+| Legacy Role | Phân loại | Target | Ghi chú |
+|---|---|---|---|
+| ADMIN | **Hỗn hợp — phải tách** (mục CV) | Không map thẳng `ADMIN → FOUNDER` | Thực tế legacy ADMIN gộp Company Owner/Admin + technical admin + healthcare admin. Phần 10 (migration thật) phải xem xét từng User cụ thể, không suy đoán hàng loạt. |
+| MANAGER | ORGANIZATIONAL POSITION + PERMISSION PACK | `CompanyRolePreset.MANAGER` cho quyền vận hành cơ bản; quyền nghiệp vụ cụ thể (nếu có) qua permission pack riêng | |
+| TELESALE | PROFESSIONAL ROLE | `Position` (Phần 4) + permission pack Sales, KHÔNG phải CompanyRolePreset | |
+| RECEPTION | PROFESSIONAL ROLE | `Position` (Phần 4) | |
+| CONSULTANT | PROFESSIONAL ROLE | `Position` (Phần 4) + permission pack liên quan tư vấn/hoa hồng | |
+| DOCTOR | PROFESSIONAL ROLE (mục CIV, ví dụ chính thức của Master Prompt) | `Position` (Healthcare Professional Role) + healthcare permission pack | KHÔNG `CompanyRolePreset.DOCTOR` — Position ≠ Permission (Law XX) |
+| NURSE | PROFESSIONAL ROLE | `Position` + healthcare permission pack | |
+| CARE | PROFESSIONAL ROLE | `Position` + CRM/care permission pack | |
+| SHAREHOLDER | tương lai: Ecosystem/Company relationship + VIEWER + report permission (mục CVI) | Chưa ép vào core role — cần capability riêng (cổ đông có thể xuyên nhiều Company) | Không implement Phần 3 |
+| COLLABORATOR | EXTERNAL RELATIONSHIP (mục CVII) | Có thể KHÔNG phải `CompanyMembership`/Employee — là quan hệ đối tác ngoài (giữ nguyên ý tưởng `Collaborator` model của legacy, xem Legacy Capability Matrix L-C12) | Không ép thành Company Member role nếu không hợp lý |
+
+**Nguyên tắc migration Phần 10:** legacy `Role` global → (a) nếu là quyền hệ
+thống thật → `CompanyRolePreset`/`EcosystemRolePreset` tường minh theo từng
+User; (b) nếu là vai trò nghiệp vụ/chuyên môn → `Position` (Phần 4); (c) nếu
+là quan hệ bên ngoài → giữ dạng tương đương `Collaborator`, không phải
+Membership. Không suy đoán hàng loạt — mỗi User cần review khi migrate thật.
+
 ## UNKNOWN cần migration tooling thật xử lý (Phần 10, không đoán ở đây)
 
 - Từng record `ZProject` cụ thể: COMPANY vs BRANCH vs PROJECT vs OTHER —

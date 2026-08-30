@@ -3,6 +3,22 @@
 Đi kèm `LEGACY_CAPABILITY_MATRIX.md`. File này trả lời: **cái gì được phép
 mang sang, cách nào, và tuyệt đối không được mang gì.**
 
+## Security comparison — kết quả implement Phần 3 (mục CCXXXVIII)
+
+| Legacy pattern | Quyết định | Trạng thái sau Phần 3 |
+|---|---|---|
+| `user.role === "ADMIN"` bypass `ZProjectMember` check (`v2-access.ts`) | **REJECT** | Xác nhận: KHÔNG có nhánh tương đương trong `src/lib/permissions/`. Chống tái phát bằng test tĩnh `presets.test.ts` + integration test `tenant-isolation.itest.ts` (24 test, xem `docs/checkpoints/LATEST.md`). |
+| `ZProjectMember` (project membership) | **ADAPT** → `CompanyMembership` | Implement thật ở Phần 3, có unique `(companyId, userId)`, role preset tách biệt Owner/Admin/Manager/Member/Viewer. |
+| `v2-write-denial.itest.ts` (multi-company QA, negative test trên DB thật) | **SALVAGE_TEST** | Áp dụng đúng khuôn mẫu (chặn DB URL giống production, seed/cleanup tự động) cho `tenant-isolation.itest.ts`. |
+| `AuditLog` (append-only) | **KEEP/ADAPT** | `AuditEvent` model mới, ghi trong cùng `$transaction` với state change (chặt hơn legacy — chưa có trigger chặn UPDATE/DELETE ở DB level, ghi risk bên dưới). |
+| `bypassTenantFilter` (`v2-tenant-extension.ts`, escape hatch có tài liệu) | **KEEP concept** | Tương đương: đường "ecosystem.company.view_all" trong `resolveCompanyContextForActor()` — có tài liệu, scoped rõ (chỉ đọc, không ghi), khác về chất với ADMIN-bypass. |
+
+**Risk còn mở:** `AuditEvent` chưa có DB-level trigger chặn UPDATE/DELETE
+như `AuditLog` của ZenithTasks — hiện chỉ dựa vào việc không có code nào gọi
+`update`/`delete` trên bảng này. Cân nhắc thêm trigger/permission DB thật
+nếu audit trail cần chống cả truy cập trực tiếp SQL (ghi vào
+`docs/checkpoints/LATEST.md` mục Open Risks).
+
 ## Tuyệt đối KHÔNG copy (secrets — chỉ ghi path, không mở/không quote nội dung)
 
 Xác nhận có tồn tại trong `ZenithTasks` (path only, chưa từng mở):

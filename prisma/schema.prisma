@@ -1,6 +1,13 @@
-// Minimal Phase-1 technical bootstrap schema.
-// KHÔNG thêm domain model (Ecosystem/Company/...) ở đây — đó là Phần 2/3.
-// HealthCheck chỉ tồn tại để chứng minh pipeline schema -> migrate -> client -> query chạy được.
+// Phần 3 — Ecosystem + Company + Identity + Membership + Permission Foundation.
+// Xem docs/architecture/DOMAIN_MODEL.md cho lý do thiết kế đầy đủ.
+//
+// Bất biến bắt buộc (không được vi phạm khi thêm model/field mới):
+//   - User KHÔNG có role business global. Quyền luôn qua EcosystemMembership/
+//     CompanyMembership.
+//   - Company.ecosystemId bắt buộc, không nullable.
+//   - Không role nào (kể cả FOUNDER/ECOSYSTEM_ADMIN) tự động có quyền ghi vào
+//     một Company cụ thể — phải có CompanyMembership tường minh trên đúng
+//     Company đó. Xem docs/architecture/TENANT_INVARIANTS.md.
 
 generator client {
   provider = "prisma-client-js"
@@ -11,8 +18,160 @@ datasource db {
   provider = "postgresql"
 }
 
-model HealthCheck {
-  id        String   @id @default(cuid())
-  status    String   @default("ok")
-  checkedAt DateTime @default(now())
+// ===== Identity =====
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  INVITED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  displayName  String
+  email        String     @unique
+  passwordHash String
+  status       UserStatus @default(ACTIVE)
+  avatarUrl    String?
+  locale       String     @default("vi")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  ecosystemMemberships EcosystemMembership[]
+  companyMemberships   CompanyMembership[]
+  auditEvents          AuditEvent[]
+}
+
+// ===== Ecosystem =====
+
+enum EcosystemStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+model Ecosystem {
+  id               String          @id @default(cuid())
+  code             String          @unique
+  name             String
+  status           EcosystemStatus @default(ACTIVE)
+  defaultCurrency  String          @default("VND")
+  defaultTimezone  String          @default("Asia/Ho_Chi_Minh")
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  memberships EcosystemMembership[]
+  companies   Company[]
+  auditEvents AuditEvent[]
+}
+
+enum EcosystemRolePreset {
+  FOUNDER
+  ECOSYSTEM_ADMIN
+  AUDITOR
+  VIEWER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model EcosystemMembership {
+  id         String              @id @default(cuid())
+  ecosystemId String
+  userId     String
+  rolePreset EcosystemRolePreset
+  status     MembershipStatus    @default(ACTIVE)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  ecosystem Ecosystem @relation(fields: [ecosystemId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([ecosystemId, userId])
+  @@index([userId])
+}
+
+// ===== Company — first-class tenant =====
+
+enum CompanyType {
+  GENERAL
+  HEALTHCARE
+  OTHER
+}
+
+enum CompanyStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+model Company {
+  id          String        @id @default(cuid())
+  ecosystemId String
+  code        String
+  name        String
+  legalName   String?
+  type        CompanyType   @default(GENERAL)
+  status      CompanyStatus @default(DRAFT)
+  currency    String        @default("VND")
+  timezone    String        @default("Asia/Ho_Chi_Minh")
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  ecosystem   Ecosystem            @relation(fields: [ecosystemId], references: [id])
+  memberships CompanyMembership[]
+  auditEvents AuditEvent[]
+
+  @@unique([ecosystemId, code])
+  @@index([ecosystemId])
+}
+
+enum CompanyRolePreset {
+  OWNER
+  COMPANY_ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+model CompanyMembership {
+  id         String            @id @default(cuid())
+  companyId  String
+  userId     String
+  rolePreset CompanyRolePreset
+  status     MembershipStatus  @default(ACTIVE)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([companyId, userId])
+  @@index([userId])
+  @@index([companyId])
+}
+
+// ===== Audit (platform, cross-cutting) =====
+
+model AuditEvent {
+  id           String   @id @default(cuid())
+  actorUserId  String
+  ecosystemId  String?
+  companyId    String?
+  action       String
+  targetType   String
+  targetId     String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  actor     User       @relation(fields: [actorUserId], references: [id])
+  ecosystem Ecosystem? @relation(fields: [ecosystemId], references: [id])
+  company   Company?   @relation(fields: [companyId], references: [id])
+
+  @@index([ecosystemId, action])
+  @@index([companyId, action])
+  @@index([actorUserId])
 }

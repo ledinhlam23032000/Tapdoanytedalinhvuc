@@ -168,3 +168,20 @@ vì đây là thao tác một-lần cực kỳ rủi ro với dữ liệu tài c
 thuộc Phần 10, sau khi toàn bộ domain đã ổn định và có parity check rõ ràng
 (Customer count, Finance totals, Open debt, Payroll history, Appointments,
 Medical cases, Inventory balances, Audit trails — mục LXXXVII).
+
+## ADR-012 — Company code unique trong phạm vi Ecosystem, không global
+
+**Quyết định:** `Company.code` chỉ bắt buộc unique trong cùng một
+`ecosystemId` (`@@unique([ecosystemId, code])`), không unique toàn hệ
+thống.
+
+**Vì sao:** Master Prompt Phần 2 mục CXII khuyến nghị rõ hướng này trừ khi
+có lý do global; không có lý do nào như vậy ở giai đoạn hiện tại (chỉ 1
+Ecosystem). Giữ code scoped theo Ecosystem tránh khoá cứng một namespace
+toàn cục không cần thiết khi sản phẩm mở rộng nhiều Ecosystem sau này.
+
+**Hệ quả:** Route `/c/[code]` (Phần 3) resolve Company theo code trong phạm
+vi các Ecosystem mà actor có quyền truy cập — nếu tương lai có nhiều
+Ecosystem trùng code, đây là giới hạn đã biết, chấp nhận defer UX đa
+Ecosystem theo đúng mục CXXIV Master Prompt (xem
+`src/lib/authorization/company-context.ts`).

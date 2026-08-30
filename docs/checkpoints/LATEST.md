@@ -1,130 +1,154 @@
-# Checkpoint — Phần 2 hoàn tất
+# Checkpoint — Phần 3 hoàn tất
 
-(Checkpoint Phần 1 vẫn xem được ở lịch sử git — `git log --oneline` — commit
-"Part 1: product genesis...". File này chỉ giữ checkpoint MỚI NHẤT theo đúng
-Source of Truth Hierarchy.)
+(Checkpoint Phần 1/Phần 2 xem lịch sử git — `git log --oneline` — commit
+"Part 1: ..." và "Part 2: ...". File này chỉ giữ checkpoint MỚI NHẤT.)
 
-PHASE 2 STATUS: **COMPLETE** — `PART_2_COMPLETE`, `READY_FOR_PART_3`
+## PHASE 3 STATUS
+
+**COMPLETE** — `PART_3_COMPLETE`, `READY_FOR_PART_4`. Đây là phase
+implement THẬT đầu tiên (không còn chỉ docs) — schema Prisma migrate được,
+app chạy được, đăng nhập/tạo Company/quản lý thành viên hoạt động end-to-end
+qua browser thật, 24 integration test tenant-isolation PASS, adversarial
+code review PASS.
 
 TARGET HEAD: xem commit ngay sau checkpoint này (`git log -1`).
 
-LEGACY HEAD OBSERVED: `e420e3809b788f4f130db082dd798fe5e9e71b3a` (không đổi
-so với Phần 1 — không có hoạt động mới nào trên ZenithTasks).
+## SCHEMA IMPLEMENTED
 
-## COMPLETED
+`User`, `Ecosystem`, `EcosystemMembership`, `Company`, `CompanyMembership`,
+`AuditEvent` (`prisma/schema.prisma`, migration
+`20260829235717_ecosystem_company_identity_foundation`). Verified qua cả
+`prisma migrate dev` (local) và `prisma migrate deploy` (production-style,
+fresh-install test).
 
-1. Đọc toàn bộ Master Prompt Phần 2 (dòng ~3615–7793/54203 của
-   `master_prompt.md` convert từ docx).
-2. Thiết kế Domain Model đầy đủ: Ecosystem, EcosystemMembership, Company,
-   CompanyMembership, OrganizationUnit, Position, Assignment, Project,
-   ProjectMembership, WorkItem, generic business domains (Customer/
-   Appointment/Sale/LedgerEntry/PayrollRun/Inventory), Healthcare vertical
-   boundary, Agent (AI scope), Approval/Audit cross-cutting — có ERD Mermaid
-   + trả lời đủ 10 acceptance scenario + 12 câu hỏi entity relationship bắt
-   buộc (mục CI).
-3. Data Ownership Matrix đầy đủ theo Master Prompt mục CIII.
-4. Tenant Invariants: threat model 10 vector (mục CIV) + acceptance test
-   hình thức cho từng invariant.
-5. Security Boundaries: Identity/Permission, AI safety, Audit, Secrets,
-   Platform Operator.
-6. Legacy → Target Map theo từng model/entity (bổ sung Legacy Capability
-   Matrix theo capability của Phần 1).
-7. 5 ADR mới (ADR-007 đến ADR-011): Ecosystem boundary, Project trong
-   Company không nullable, Identity tách Membership/Role, Organization
-   trong Company, Migration greenfield qua import/cutover.
-8. **Red-team + Simplicity adversarial review** (workflow 2 agent độc lập,
-   mỗi agent tự đọc toàn bộ 7-8 doc + Legacy Capability Matrix, có trích dẫn
-   nguyên văn cho mọi kết luận) — xem `docs/architecture/RED_TEAM_REVIEW.md`.
-9. Sửa toàn bộ 3 vấn đề P1 + 5 vấn đề P2 mà review tìm được (0 P0).
+## AUTH STRATEGY
 
-## PRODUCT INVARIANTS CONFIRMED
+JWT (`jose`, HS256) trong cookie httpOnly, session chỉ chứa
+`{userId, displayName}` — không nhồi permission. `bcryptjs` cost 12 cho
+password. Salvage đúng pattern đã chứng minh tốt ở ZenithTasks, viết code
+mới (không copy file). Chi tiết: `docs/security/AUTHORIZATION_MODEL.md`.
 
-Company ≠ Project (ADR-003/008) · Company ≠ Branch (ADR-010) · Ecosystem ≠
-toàn database (ADR-007) · User ≠ Role (ADR-009) · Position ≠ Permission ·
-Project ≠ chủ sổ Ledger · Healthcare ≠ Product Core (ADR-004) · AI Scope ≠
-Client input — cả 8 ranh giới này đã được red-team cố tình tấn công và xác
-nhận vững (4/8 không tìm được gap; 4/8 tìm được gap nhỏ, **đã sửa hết**).
+## ECOSYSTEM MODEL / COMPANY MODEL / MEMBERSHIP MODEL / PERMISSION MODEL
 
-## DOMAIN MODEL
+Xem `docs/security/AUTHORIZATION_MODEL.md` — mô tả đầy đủ implementation
+thật, đặc biệt quyết định quan trọng nhất: **không role Ecosystem-tier nào
+(FOUNDER, ECOSYSTEM_ADMIN) tự động ghi được vào một Company cụ thể** — luôn
+cần `CompanyMembership` tường minh, trừ đúng 3 hành động lifecycle
+(create/suspend/resume/archive) là Ecosystem-tier có chủ đích.
 
-Xem `docs/architecture/DOMAIN_MODEL.md`. Điểm mấu chốt sau khi sửa theo
-review: `Agent.scopeType` chỉ còn `ECOSYSTEM | COMPANY` (không phải 4 giá
-trị); `Company.type` chỉ còn `GENERAL | HEALTHCARE | OTHER`; `Company.status`
-có `DRAFT` dứt điểm; `Customer` không có cột `projectId` trực tiếp (chỉ qua
-`ProjectCustomer` tương lai); `Assignment` giữ lại với lý do cụ thể (kiêm
-nhiệm + lịch sử chuyển vị trí, không phải vì domain law trừu tượng).
+## COMPANY CONTEXT
 
-## DATA OWNERSHIP DECISIONS
+`src/lib/authorization/company-context.ts` — `resolveCompanyContextForActor`
+là điểm authorization duy nhất mọi domain code (kể cả Phần 4 trở đi) phải
+gọi qua. Có bản request-scoped (cookie-based, cho page/action) và bản
+actorId-based (cho integration test) — refactor có chủ đích để test được mà
+không giả lập HTTP request.
 
-Xem `docs/architecture/DATA_OWNERSHIP.md`. Không có UNKNOWN ở core entity —
-chỉ còn UNKNOWN ở mức phân loại record `ZProject` cụ thể (việc của migration
-tooling Phần 10, không phải thiếu sót thiết kế).
+## LIFECYCLE
 
-## TENANT SECURITY DECISIONS
+Company: `DRAFT → ACTIVE → SUSPENDED → ARCHIVED`. Suspend/Resume/Archive
+implement đủ, có audit, có guard chặn ghi khi không `ACTIVE`. Last-owner
+protection + chống self-role-change + chỉ Owner cấp được Owner — cả 3 đều
+có integration test xác nhận.
 
-Xem `docs/architecture/TENANT_INVARIANTS.md` + `SECURITY_BOUNDARIES.md`.
-Hai quyết định mới quan trọng nhất sau review: (1) Composite FK/DB
-constraint **bắt buộc** (không phải "cân nhắc") cho Finance + Healthcare;
-(2) `FOUNDER`/`ECOSYSTEM_ADMIN` không tự động ghi được vào một Company cụ
-thể (kể cả qua AI) nếu không có `CompanyMembership` tường minh trên đúng
-Company đó — đây là ranh giới trực tiếp ngăn lặp lại lỗ hổng ADMIN-bypass
-thật đã tìm thấy ở ZenithTasks (Legacy Capability Matrix mục L-V01), dưới
-mọi hình dạng có thể tái xuất hiện (role trùng tên, AI ghi thay).
+## AUDIT
 
-## LEGACY MAPPING SUMMARY
+`AuditEvent`, ghi trong cùng `$transaction` với mọi state change quan
+trọng (Company lifecycle, membership add/change/remove, login). Risk còn
+mở: chưa có DB-level trigger chống UPDATE/DELETE trực tiếp (khác
+`AuditLog` cũ của ZenithTasks) — ghi trong Salvage Ledger.
 
-`docs/architecture/LEGACY_TO_TARGET_MAP.md` — cover đủ domain chính theo
-Master Prompt mục CXXXIII: Clinic, Multi-company V2, AI, Finance, Payroll,
-CRM, Work, Organization, Permissions, Approval, Audit.
+## TEST PERSONAS
 
-## ADRs CREATED
+Founder, EcosystemAdmin, OwnerA, AdminA, MemberA, ViewerA, OwnerB, MemberB,
+Outsider trên Ecosystem E1 (Company A, B) + Ecosystem E2 (Company C) — đúng
+theo mục CXXXIV Master Prompt. Fixture tự sinh/tự dọn trong
+`tenant-isolation.itest.ts`, xác nhận DB sạch sau mỗi lần chạy (đã verify
+thủ công: về đúng 1 user thật sau test).
 
-ADR-007 (Ecosystem boundary) · ADR-008 (Project trong Company, không
-nullable) · ADR-009 (Identity tách Membership/Role) · ADR-010 (Organization
-trong Company, Branch ≠ tenant) · ADR-011 (Migration qua import/cutover).
+## STATIC TESTS
 
-## OPEN ARCHITECTURE RISKS
+`npx tsc --noEmit` 0 lỗi · `npx eslint .` 0 lỗi/cảnh báo · `npx next build`
+PASS (6 route: `/`, `/_not-found`, `/api/health`, `/c/[code]`,
+`/c/[code]/members`, `/login`).
 
-1. Composite FK cho Finance/Healthcare mới là quyết định nguyên tắc — thiết
-   kế schema Prisma cụ thể (kiểu constraint nào, có khả thi 100% với Prisma
-   hay cần raw SQL/trigger) chưa verify kỹ thuật, để Phần 3 làm spike nếu
-   cần (mục CXXV Architecture Spikes).
-2. Đánh giá PostgreSQL Row-Level Security (RLS) làm lớp phòng thủ thứ hai —
-   chưa quyết định dùng hay không, chỉ ghi nhận nên đánh giá ở Phần 3.
-3. Mâu thuẫn tài liệu về trạng thái migrate V2 production của ZenithTasks
-   (ghi từ Phần 1, chưa giải quyết, không ảnh hưởng Phần 2/3 vì
-   Tapdoanytedalinhvuc không đọc DB ZenithTasks ở giai đoạn này).
+## INTEGRATION TESTS
 
-## DECISIONS DEFERRED
+`npm run test:integration` — **24/24 PASS**. Cover: cross-company read/write
+deny (LXVII-LXXI), outsider deny (LXXIII), cross-ecosystem isolation
+(LXXIV-LXXV, CLXXII), Founder/Ecosystem-tier không tự ghi Company cụ thể
+(sửa sau red-team Phần 2), privilege escalation × 3 dạng (CLXX-CLXXI),
+last-owner protection (LI/LXXX), suspended company blocks write (LXXVI),
+archived company idempotent (LXXVII), revoked membership hiệu lực ngay
+(LXXVIII), role preset đúng khai báo (LXXXI), default deny (LXXXIII).
 
-`Agent.scopeType` ORG_UNIT/PROJECT (chờ use case cụ thể + ADR riêng) ·
-`Company.type` AESTHETICS/DISTRIBUTION/SERVICE/RETAIL (chờ Company thật
-thuộc loại đó) · Cross-company Project collaboration (Lead Company +
-Participant Companies) · `ProjectCustomer` join table · Feature
-configuration primitives (xoá khỏi Platform list, thêm lại khi có driver cụ
-thể) · Assignment có thể defer nếu tới đầu Phần 3 vẫn chưa có workflow kiêm
-nhiệm/chuyển vị trí thật cần dùng.
+## TENANT SECURITY TESTS
 
-## TESTS — RESULTS
+Đã tích hợp trong integration test suite ở trên (không tách file riêng —
+đúng tinh thần "một suite đủ, không nhân bản không cần thiết"). Bổ sung
+adversarial code review độc lập (subagent đọc source thật, KHÔNG đọc test
+suite trước khi kết luận) — verdict **PASS**, xem
+`docs/security/RED_TEAM_CODE_REVIEW.md`.
 
-Phần 2 không có test code (docs-only theo đúng phạm vi mục CXXIV). "Test"
-của Phần 2 là review đối kháng: 2/2 reviewer hoàn thành, 0 P0, 3 P1 + 5 P2
-tìm được và đã sửa hết — xem `docs/architecture/RED_TEAM_REVIEW.md` để có
-bảng đầy đủ câu hỏi/kết luận/mức độ.
+## BROWSER TESTS
 
-## NEXT
+Đã tự mở trình duyệt thật (Browser tool): đăng nhập Founder → Ecosystem
+Home hiện đúng → tạo Company "Bệnh viện Đa khoa Hồng Phúc" → tự động chuyển
+sang Company Home, vai trò hiển thị đúng "OWNER" → tab "Thành viên" hoạt
+động, form thêm thành viên hiện đúng. Phát hiện và tự sửa 1 bug thật trong
+lúc test: Next.js 16 dev server chặn cross-origin request từ browser-test
+tool (403), phải thêm `allowedDevOrigins` vào `next.config.ts` (chỉ ảnh
+hưởng `next dev`, không ảnh hưởng production build). Nút suspend/archive
+dùng `window.confirm()` — tool test không click qua được dialog gốc trình
+duyệt, các action này verify qua integration test thay thế (rigor cao hơn
+click UI đơn thuần).
 
-Phần 3 — Ecosystem + Company + Identity + Membership + Permission + Tenant
-Security Foundation. Đây là phase implement thật đầu tiên (Prisma schema,
-auth, enforcement code, negative test thật). Xem
-`docs/project/CURRENT_WAVE.md` để biết input đã sẵn sàng.
+## FRESH DB TEST
+
+Đã chạy lại từ đầu: `docker compose down -v` (xoá sạch volume) →
+`docker compose up -d` → `prisma migrate deploy` (production-style, không
+phải `migrate dev`) → `bootstrap-founder` → `next build` → unit test →
+integration test — **tất cả PASS từ database rỗng hoàn toàn**.
+
+## LEGACY SALVAGE USED
+
+Auth pattern (JWT/bcrypt) từ ZenithTasks (viết mới, không copy file); ý
+tưởng test cross-tenant trên DB thật từ `v2-write-denial.itest.ts`; nguyên
+tắc "escape hatch có tài liệu, scoped rõ" từ `bypassTenantFilter`. Chi tiết
+đối chiếu: `docs/legacy/SALVAGE_LEDGER.md` mục "Security comparison".
+
+## SECURITY RISKS (còn mở, không phải HARD BLOCK)
+
+1. `AuditEvent` chưa có DB-level trigger chống UPDATE/DELETE trực tiếp.
+2. Không có session revocation list/tokenVersion — JWT bị lộ trước khi đổi
+   mật khẩu vẫn còn hiệu lực tới hết hạn 30 ngày (trừ khi user bị suspend).
+   Không liên quan tenant isolation; ghi nhận cho Phần tương lai nếu threat
+   model cần.
+3. Composite FK/DB constraint cho Finance/Healthcare (đã cam kết ở
+   TENANT_INVARIANTS.md) chưa áp dụng vì các domain đó chưa tồn tại — nhắc
+   lại để Phần 5/6/7 không quên.
+
+## DEFERRED ITEMS
+
+Position/Assignment/OrganizationUnit/Project/WorkItem (Phần 4) · role
+builder UI · email invitation service (hiện chỉ hỗ trợ thêm User đã có sẵn
+qua email) · break-glass access · user impersonation · hard delete Company
+có dữ liệu · transfer-ownership UI riêng (hiện đổi Owner qua
+update-role, do một Owner khác thực hiện) · multi-ecosystem UX đầy đủ (data
+model đã hỗ trợ, UI chưa cần).
 
 ## DO NOT REDO
 
-- Không thiết kế lại Domain Model từ đầu — đã có, đã qua red-team.
-- Không thêm `Agent.scopeType` ORG_UNIT/PROJECT hay `Company.type` mới nếu
-  chưa có use case cụ thể + ADR (xem PROJECT_STATE.json mục doNotRedo).
-- Không để bất kỳ role nào (`FOUNDER`, `ECOSYSTEM_ADMIN`, hay tên tương lai
-  nào có vẻ "admin") tự động bypass `CompanyMembership` check khi ghi vào
-  một Company cụ thể — kể cả qua AI. Đây là bài học đắt giá nhất rút ra từ
-  toàn bộ Phần 1+2, đừng lặp lại dưới bất kỳ tên gọi mới nào ở Phần 3.
+- Không thiết kế lại authorization foundation — đã xong, đã test, đã
+  red-team.
+- Không thêm bất kỳ code nào dạng `if (role === "ADMIN"/"FOUNDER") return
+  true` để cấp quyền một Company cụ thể — đây là bài học đắt giá nhất của
+  toàn dự án, đã chặn ở nhiều lớp (permission registry, resolver,
+  company-context, test, code review).
+- Không tạo domain model Work/Organization/Project trong `schema.prisma`
+  trước khi thật sự bắt đầu Phần 4.
+
+## NEXT
+
+Phần 4 — Work + Organization + Project Foundation. Xem
+`docs/project/CURRENT_WAVE.md` để biết input đã sẵn sàng.

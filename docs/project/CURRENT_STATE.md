@@ -1,60 +1,90 @@
 # Current State
 
-Cập nhật lần cuối: cuối Phần 1 (Product Genesis + Archaeology + Memory).
+Cập nhật lần cuối: cuối Phần 3 (Ecosystem + Company + Identity + Membership
++ Permission + Tenant Security Foundation).
 
-## Stack đã bootstrap (ADR-006)
+## Stack (ADR-006 + Phần 3 bổ sung)
 
 Next.js 16.3.3 (App Router, Turbopack) + React 19.2.8 + TypeScript (strict) +
 Tailwind CSS v4 + Prisma 7.9.1 (`@prisma/adapter-pg`, client generate ra
-`src/generated/prisma`, cấu hình CLI ở `prisma.config.ts` vì Prisma 7 không
-còn cho `url` trực tiếp trong `datasource` của `schema.prisma`) + PostgreSQL
-16 (Docker, local dev port **5442** — cố tình khác 5432 của ZenithTasks để
-chạy song song không đụng nhau) + Vitest 4 (unit test).
+`src/generated/prisma`, cấu hình CLI ở `prisma.config.ts`) + PostgreSQL 16
+(Docker, local dev port **5442**) + Vitest 4 (unit + integration 2 lane,
+salvage convention ZenithTasks) + `jose` (JWT) + `bcryptjs` (password hash,
+cost 12) + `tsx` (chạy script TypeScript như `bootstrap-founder.ts`).
 
 ## Lệnh quan trọng
 
 ```bash
-docker compose up -d          # khởi động Postgres local (port 5442)
-npm install                   # cài dependencies (tự chạy `prisma generate`)
-npx prisma migrate dev        # tạo/áp migration mới khi đổi schema
-npm run test                  # vitest run
-npx tsc --noEmit               # typecheck
-npx eslint .                   # lint
-npx next build                 # build production
-npx next dev -p 3417           # dev server (đổi port nếu 3417 đang bận)
+docker compose up -d              # khởi động Postgres local (port 5442)
+npm install                       # cài dependencies (tự chạy `prisma generate`)
+npx prisma migrate dev            # tạo/áp migration mới khi đổi schema
+npm run bootstrap:founder         # tạo Ecosystem + Founder đầu tiên (đọc env BOOTSTRAP_*)
+npm run test                      # vitest unit (không cần DB)
+npm run test:integration          # vitest integration (*.itest.ts — CẦN Postgres thật)
+npm run qa:tenant-isolation       # chỉ chạy bộ test tenant isolation (24 test)
+npx tsc --noEmit                  # typecheck
+npx eslint .                      # lint
+npx next build                    # build production
+npx next dev -p 3521              # dev server (allowedDevOrigins đã cấu hình cho 127.0.0.1/localhost)
 ```
 
-`.env` (không commit) trỏ `DATABASE_URL` vào Postgres local port 5442 —
-xem `.env.example` cho format.
+`.env` (không commit) cần `DATABASE_URL`, `AUTH_SECRET`
+(`openssl rand -base64 48`), và `BOOTSTRAP_FOUNDER_EMAIL`/
+`BOOTSTRAP_FOUNDER_PASSWORD`/`BOOTSTRAP_ECOSYSTEM_CODE`/
+`BOOTSTRAP_ECOSYSTEM_NAME` (chỉ cần khi chạy `bootstrap:founder`) — xem
+`.env.example`.
 
-## Đã verify (Phần 1)
+## Schema hiện tại (Phần 3)
 
-- `npx prisma migrate dev` chạy thật, tạo migration `20260829185733_init`
-  cho model bootstrap `HealthCheck`.
-- `npm run test` (Vitest) PASS 1/1 — round-trip thật qua Prisma → Postgres
-  (tạo/đọc/xoá 1 row `HealthCheck`).
-- `npx tsc --noEmit` — 0 lỗi.
-- `npx eslint .` — 0 lỗi/cảnh báo (sau khi loại `src/generated/**` khỏi lint
-  scope — đây là code Prisma tự sinh, không phải code viết tay).
-- `npx next build` — build production thành công, 3 route (`/`,
-  `/_not-found`, `/api/health`).
-- Đã tự mở trình duyệt (Browser tool) tới `http://127.0.0.1:3417/api/health`
-  và `http://127.0.0.1:3417/` — xác nhận bằng mắt pipeline
-  browser→Next.js→Prisma→Postgres chạy thật, không chỉ tin log server.
+`prisma/schema.prisma`: `User`, `Ecosystem`, `EcosystemMembership`,
+`Company`, `CompanyMembership`, `AuditEvent`. Migration:
+`20260829235717_ecosystem_company_identity_foundation` (thay thế migration
+`HealthCheck` của Phần 1 — đã reset local dev DB vì chỉ có dữ liệu bootstrap
+tạm, không phải production).
 
-## KHÔNG có trong Phần 1 (đúng theo giới hạn Phiên 1 của Master Prompt)
+## Đã verify (Phần 3)
 
-- Chưa có Ecosystem/Company/User/Auth model nào — `schema.prisma` chỉ có
-  `HealthCheck` (sẽ xoá khi Phần 3 thêm model thật).
-- Chưa có UI nghiệp vụ nào — trang `/` vẫn là trang chào mặc định của
-  `create-next-app`.
-- Chưa cấu hình CI.
+- **Unit test:** `npm run test` — 10/10 PASS (password hashing, permission
+  preset "no god mode" check).
+- **Integration test:** `npm run test:integration` — **24/24 PASS**, cover
+  đủ ma trận Master Prompt mục LXVI-LXXXI + CLXVIII-CLXXV: cross-company
+  read/write deny, outsider deny, cross-ecosystem isolation, Founder/
+  Ecosystem-tier KHÔNG tự ghi được Company cụ thể nếu thiếu
+  CompanyMembership, privilege escalation (self-role-change, non-Owner cấp
+  Owner, Company-tier action không chạm được EcosystemMembership),
+  last-owner protection, suspended/archived Company guard, revoked
+  membership có hiệu lực ngay, role preset đúng như khai báo, default deny.
+- **Anti-pattern search** (mục CCXLVI-CCXLVII): không tìm thấy
+  `role === "ADMIN"` bypass, `getAllCompanies` không lọc, hay thuật ngữ drift
+  ("workspace tenant", "clinic root product"...) trong code thật (chỉ có
+  trong comment giải thích cái KHÔNG được làm).
+- **Adversarial code review** (subagent đọc source thật, không phải docs):
+  xem `docs/checkpoints/LATEST.md` mục kết quả.
+- **Browser journey thật** (Browser tool, không chỉ đọc code): đăng nhập
+  Founder → tạo Company "Bệnh viện Đa khoa Hồng Phúc" → tự động thành OWNER
+  → xem trang Thành viên → nav hoạt động đúng. (Nút suspend/archive dùng
+  `window.confirm()` — công cụ browser test không click qua được dialog gốc
+  của trình duyệt; các action này được verify đầy đủ qua integration test
+  thay vì qua tool này.)
+- `npx tsc --noEmit`, `npx eslint .`, `npx next build` — sạch.
 
-## Known issue kế thừa từ tooling (không phải do quyết định của ta)
+## Known issue / quyết định kỹ thuật đáng chú ý
 
-`npm audit` báo 3 lỗi "high" (stack-exhaustion trong `deepmerge-ts`, dependency
-bắc cầu của `@prisma/config` mà Prisma CLI 7.x dùng). Fix đề xuất của npm là
-hạ xuống `prisma@6.12.0` — trái với ADR-006 (đồng bộ version với ZenithTasks
-đang chạy production 7.9.1, cũng dính lỗi tương tự). Đây là advisory ở tầng
-CLI/dev-tooling (không phải dependency runtime của app), rủi ro thấp. Theo
-dõi, không phải HARD BLOCK.
+- **`allowedDevOrigins`** phải thêm vào `next.config.ts` (`127.0.0.1`,
+  `localhost`) — Next.js 16 dev server mặc định chặn cross-origin request
+  tới dev resource, browser test tool proxy qua origin khác nên bị 403 nếu
+  thiếu config này. Chỉ ảnh hưởng `next dev`, không ảnh hưởng production
+  build.
+- `npm audit`: 3 lỗi "high" kế thừa từ Prisma CLI 7.x tooling
+  (`deepmerge-ts`) — theo dõi, không block (đã ghi từ Phần 1, vẫn còn).
+- `AuditEvent` chưa có DB-level trigger chống UPDATE/DELETE trực tiếp (khác
+  với `AuditLog` của ZenithTasks có trigger) — xem Salvage Ledger mục "Risk
+  còn mở".
+
+## KHÔNG có trong Phần 3 (đúng phạm vi, xem mục IV Master Prompt Phần 3)
+
+CRM/Customer, Finance, Payroll, Inventory, Healthcare, Digital COO/AI
+proactive, Work Core, Project, Organization/Position/Assignment (Phần 4),
+advanced dashboard, reporting engine, Zalo/SMS, payment integration, company
+template phức tạp, email invitation service, role builder UI, break-glass
+access, user impersonation.
