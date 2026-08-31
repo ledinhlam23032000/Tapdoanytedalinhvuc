@@ -1,5 +1,17 @@
 # Domain Model (Phần 2)
 
+## Cập nhật Phần 5 — CRM/Lead/Appointment/Sales đã implement thật
+
+Mục "Generic Business Domains" bên dưới liệt kê `Customer`/`Appointment`/
+`Sale` conceptual từ Phần 2 — đã implement đúng ownership (Company-owned,
+attribution qua OrgUnit/Project optional) nhưng KHÔNG đúng 100% field-level
+như draft: thêm `Lead` (không có trong draft Phần 2, quyết định dựa bằng
+chứng legacy thật — ADR-017), thêm `CatalogItem`/`SaleLine` (Sale ở Phần 2
+chưa tách catalog/line-item), `Customer.phone` mã hoá tại rest thay vì
+plaintext (ADR-023). KHÔNG có `SalesOpportunity` dù draft gợi ý (không đủ
+bằng chứng — ADR-019). Chi tiết: `docs/domain/CRM.md` và các file domain
+con.
+
 ## Cập nhật Phần 4 — Organization/Project/Work Core đã implement thật
 
 Ba mục "Organization", "Project", "Work Core" bên dưới là conceptual draft

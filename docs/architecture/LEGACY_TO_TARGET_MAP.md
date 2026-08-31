@@ -51,6 +51,23 @@ itest.ts`-style đã áp dụng thành `tenant-isolation-part4.itest.ts`. UI:
 today`, `/c/[code]/projects` (trang `/to-chuc` legacy chỉ đọc, đã thay hoàn
 toàn bằng CRUD thật).
 
+## Cập nhật Phần 5 — Legacy Capability Matrix rows (mục CCLXIX)
+
+| Legacy | Target entity | Salvage decision | Ghi chú |
+|---|---|---|---|
+| `Customer` (Clinic legacy, schema:402-445) | `Customer` | KEEP CONCEPT + MIGRATE DATA + REWRITE OWNERSHIP | Physical model REWRITE (mã hoá SĐT viết mới, không copy khoá — ADR-023); data thật CHƯA migrate (Phần 10). |
+| `Lead` (Clinic legacy, schema:464) | `Lead` | KEEP CONCEPT + MIGRATE DATA + REWRITE OWNERSHIP | Bằng chứng trực tiếp cho ADR-017 — xem `LEGACY_CAPABILITY_MATRIX.md` L-C04. |
+| `ZWorkspaceCustomer` (V2) | `Customer` | MERGE INTO TARGET CUSTOMER | REMAP `projectId`→`companyId`, giống pattern Phần 3/4. |
+| Legacy "Customer Care" (follow-up, call script, care status, reminder — rải rác trong Clinic + `lib/workqueue.ts`) | `CustomerInteraction` + Work Core + Appointment | ADAPT INTO WORK CORE | KHÔNG tạo `CareTask` engine riêng (mục CXXVIII, đã xác nhận không có trong code — anti-drift check CCCV Q9 = NO). |
+| `Appointment`/`FollowUp` (Clinic legacy, schema:489/719) | `Appointment` | KEEP CONCEPT + MIGRATE DATA, MERGE FollowUp vào Appointment lifecycle | 2 model legacy vì quan hệ 1-1 vs 1-nhiều khác nhau (L-C02) — Target chỉ 1 `Appointment`, follow-up là WorkItem sinh ra từ No-show, không phải bảng FollowUp riêng. |
+| `ZWorkspaceAppointment` (V2) | `Appointment` | MERGE INTO APPOINTMENT | Field y tế (nếu có) tách sang Healthcare Vertical (Phần 7), chưa build. |
+| Clinic `CaseService`/`Payment` (một phần đóng vai giao dịch bán) | `Sale`/`SaleLine` (phần generic) + Healthcare vertical (phần lâm sàng, Phần 7) | REWRITE có tách domain | Không map 1:1 — CaseService gộp cả dịch vụ y tế lẫn giao dịch tiền, Phần 5 chỉ salvage phần "đã bán gì, giá bao nhiêu" generic. |
+| `ZWorkspaceSale` (V2) | `Sale` | MERGE INTO SALE | Không giữ song song 2 khái niệm Sale. |
+| `ZMechanismDefinition`/`ZMechanismVersion` (rule engine chiết khấu/hoa hồng) | — (không port) | DEFER TO PART 6, salvage LOGIC/TESTS khi cần | DRAFT-only ở legacy, chưa từng chạy thật — không đủ điều kiện port theo ADR-021. |
+| Nguồn khách (không có model riêng ở legacy, chỉ field rời rạc) | `CustomerSource` | NEW | Legacy không có bảng Source chuẩn hoá — tạo mới, không REMAP. |
+| Danh mục dịch vụ/sản phẩm (rải rác `ServiceMaterial`/`Material` — phần "bán được gì", tách khỏi phần tồn kho) | `CatalogItem` | NEW (phần bán) + KEEP_CONCEPT cho phần tồn kho (Phần 6 Inventory) | `CatalogItem` chỉ lấy phần "tên/giá/loại", KHÔNG lấy `StockMovement`/giá vốn — đó là Phần 6. |
+| Customer/Sale/Appointment status field (nhiều biến thể rải rác legacy) | `CustomerStatus`/`CustomerJourneyStage`/`AppointmentStatus`/`SaleStatus` | REWRITE, tối giản hoá | Không giữ nguyên số lượng trạng thái legacy — mỗi enum Phần 5 tối giản theo đúng mục VIII/XXXVI/XLVIII/LXV. |
+
 ## Legacy Role Map (bổ sung Phần 3 — mục CIII-CVII)
 
 Legacy `Role` enum (10 giá trị, global trên `User`) KHÔNG map 1:1 vào

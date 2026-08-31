@@ -38,6 +38,30 @@ export const COMPANY_PERMISSIONS = [
   "project.create",
   "project.manage",
   "project.archive",
+  // Phần 5 — CRM + Sales + Appointment (mục LXXXIV/LXXXV Master Prompt:
+  // "keep minimal, đừng tạo hàng trăm permission" — mỗi domain chỉ đủ
+  // action thật cần, không tách quá vụn).
+  "customer.view",
+  "customer.create",
+  "customer.update",
+  "customer.archive",
+  "customer.assign",
+  "customer.interaction.create",
+  "lead.view",
+  "lead.create",
+  "lead.assign",
+  "lead.convert",
+  "appointment.view",
+  "appointment.create",
+  "appointment.update",
+  "appointment.manage",
+  "sales.view",
+  "sales.create",
+  "sales.update",
+  "sales.confirm",
+  "sales.cancel",
+  "catalog.view",
+  "catalog.manage",
 ] as const;
 
 export type EcosystemPermission = (typeof ECOSYSTEM_PERMISSIONS)[number];
@@ -52,12 +76,8 @@ export function canGrantOwnerRole(actorRolePreset: string | undefined): boolean 
   return actorRolePreset === "OWNER";
 }
 
-// Reserved namespace cho domain tương lai (Part 5+) — CHỈ khai báo tên, KHÔNG
+// Reserved namespace cho domain tương lai (Part 6+) — CHỈ khai báo tên, KHÔNG
 // implement check nào cho tới khi domain đó thực sự tồn tại (mục CCXXVI).
-// "work." đã chuyển sang COMPANY_PERMISSIONS thật ở Phần 4 — bỏ khỏi reserved.
-export const RESERVED_PERMISSION_PREFIXES = [
-  "customer.",
-  "finance.",
-  "payroll.",
-  "healthcare.",
-] as const;
+// "work." (Phần 4) và "customer."/"lead."/"appointment."/"sales."/"catalog."
+// (Phần 5) đã chuyển sang COMPANY_PERMISSIONS thật — bỏ khỏi reserved.
+export const RESERVED_PERMISSION_PREFIXES = ["finance.", "payroll.", "healthcare."] as const;

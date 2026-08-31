@@ -107,6 +107,21 @@ riêng của Phần 4: Project OWNER-membership (per-project) không tự mở r
 thành quyền cấp Company (`project.archive`/`work.assign`) — xem
 `docs/domain/PROJECT.md`.
 
+## Cập nhật Phần 5 — mở rộng sang Customer/Lead/Appointment/Sales
+
+Toàn bộ nguyên tắc nền 1-5 áp dụng nguyên vẹn cho `Customer`/`Lead`/
+`CustomerInteraction`/`Appointment`/`CatalogItem`/`Sale`/`SaleLine`. Acceptance
+test thật: `src/lib/__tests__/tenant-isolation-part5.itest.ts` — cross-company
+FK injection trên mọi FK (sourceId, ownerUserId, organizationUnitId,
+customerId, assignedUserId, catalogItemId, projectId, salespersonUserId),
+Customer search theo SĐT/tên không lộ Company khác (mục CXLIII), truy cập
+Customer bằng ID trực tiếp qua route bị deny/404 (mục CXLIV), Sale/Appointment
+injection (mục CXLV-CXLVI), Suspended/Archived Company chặn ghi cả 4 domain
+mới. Điểm khác Phần 4: visibility Customer/Appointment/Sale KHÔNG tự-scope
+theo owner (ADR-022) — test phải xác nhận đúng "Company-wide theo permission",
+KHÔNG test kiểu "MemberA không thấy Customer của MemberB trong cùng Company"
+(đó sẽ là test SAI, đi ngược ADR-022 tường minh).
+
 ## Không lặp lại (đối chiếu trực tiếp bằng chứng từ Legacy Capability Matrix)
 
 - `v2-access.ts`: `user.role === "ADMIN"` bypass toàn bộ `ZProjectMember`

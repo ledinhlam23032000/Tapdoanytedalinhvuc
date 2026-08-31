@@ -33,3 +33,45 @@ export async function assertActiveCompanyMember(companyId: string, userId: strin
     throw new Error("Người dùng phải là thành viên đang hoạt động của công ty này.");
   }
 }
+
+// Phần 5 — CRM + Sales + Appointment
+
+export async function assertSameCompanyCustomer(companyId: string, customerId: string) {
+  const customer = await db.customer.findUnique({ where: { id: customerId } });
+  if (!customer || customer.companyId !== companyId) {
+    throw new AuthorizationError("Khách hàng không hợp lệ trong công ty này.");
+  }
+  return customer;
+}
+
+export async function assertSameCompanyAppointment(companyId: string, appointmentId: string) {
+  const appointment = await db.appointment.findUnique({ where: { id: appointmentId } });
+  if (!appointment || appointment.companyId !== companyId) {
+    throw new AuthorizationError("Lịch hẹn không hợp lệ trong công ty này.");
+  }
+  return appointment;
+}
+
+export async function assertSameCompanyCatalogItem(companyId: string, catalogItemId: string) {
+  const item = await db.catalogItem.findUnique({ where: { id: catalogItemId } });
+  if (!item || item.companyId !== companyId) {
+    throw new AuthorizationError("Sản phẩm/dịch vụ không hợp lệ trong công ty này.");
+  }
+  return item;
+}
+
+export async function assertSameCompanyCustomerSource(companyId: string, sourceId: string) {
+  const source = await db.customerSource.findUnique({ where: { id: sourceId } });
+  if (!source || source.companyId !== companyId) {
+    throw new AuthorizationError("Nguồn khách hàng không hợp lệ trong công ty này.");
+  }
+  return source;
+}
+
+export async function assertSameCompanySale(companyId: string, saleId: string) {
+  const sale = await db.sale.findUnique({ where: { id: saleId } });
+  if (!sale || sale.companyId !== companyId) {
+    throw new AuthorizationError("Giao dịch không hợp lệ trong công ty này.");
+  }
+  return sale;
+}

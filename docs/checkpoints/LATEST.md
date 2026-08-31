@@ -1,177 +1,245 @@
-# Checkpoint — Phần 4 hoàn tất
+# Checkpoint — Phần 5 hoàn tất
 
-(Checkpoint Phần 1/2/3 xem lịch sử git — `git log --oneline` — commit "Part
-1: ...", "Part 2: ...", "Part 3: ...". File này chỉ giữ checkpoint MỚI
-NHẤT.)
+(Checkpoint Phần 1-4 xem lịch sử git — `git log --oneline` — commit "Part
+1: ...", ..., "Part 4: ...". File này chỉ giữ checkpoint MỚI NHẤT.)
 
-## PHASE 4 STATUS
+## PHASE 5 STATUS
 
-**COMPLETE** — `PART_4_COMPLETE`, `READY_FOR_PART_5`. Organization + Work
-Core + Project implement thật trên nền authorization Phần 3 (không viết lại
-authorization) — schema Prisma migrate được, domain service + Server Action
-+ UI chạy được end-to-end qua browser thật với 3 persona (Employee/Manager/
-Project Owner), 53 integration test PASS (24 cũ + 29 mới), adversarial code
-review 2 agent độc lập tìm 1 P1 thật + 3 P2 (đã sửa hết).
+**COMPLETE** — `PART_5_COMPLETE`, `READY_FOR_PART_6`. CRM + Sales +
+Appointment + Customer Operations implement thật trên nền authorization
+Phần 3 + Work Core Phần 4 (không viết lại 2 nền đó) — schema Prisma migrate
+được, domain service + Server Action + UI chạy được end-to-end qua browser
+thật với 3 journey bắt buộc (Reception/Sales, Sales transaction, Follow-up
+No-show), 99 integration test PASS (53 cũ + 46 mới), adversarial code
+review 3 agent độc lập tìm **2 P1 thật** (tính tiền sai, PII over-fetch) +
+nhiều P2 (đã sửa hết), và **1 P2 thật thứ 3 phát hiện trong lúc browser-test
+sau review** (Decimal object lọt qua Server Action boundary — đã sửa).
 
 TARGET HEAD: xem commit ngay sau checkpoint này (`git log -1`).
 
-## SCHEMA IMPLEMENTED (mới ở Phần 4)
+## SCHEMA IMPLEMENTED (mới ở Phần 5)
 
-`OrganizationUnit`, `Position`, `Assignment`, `WorkItem`, `Project`,
-`ProjectMembership` (`prisma/schema.prisma`, migration
-`20260830092334_organization_work_project_foundation`, sau migration Phần 3
-`20260829235717_ecosystem_company_identity_foundation`). Verified qua cả
-`prisma migrate dev` (local) và `prisma migrate deploy` (fresh-install test
-trên DB trống riêng).
+`CustomerSource`, `Lead`, `Customer`, `CustomerInteraction`, `Appointment`,
+`CatalogItem`, `Sale`, `SaleLine` (`prisma/schema.prisma`, migration
+`20260830124601_crm_sales_appointment_customer_operations`, sau migration
+Phần 4 `20260830092334_organization_work_project_foundation`). `WorkItem`
+(Phần 4) mở rộng 2 field optional `customerId`/`appointmentId` — KHÔNG tạo
+engine việc thứ 2 (ADR-014 vẫn áp dụng nguyên vẹn). Verified qua cả `prisma
+migrate dev` (local) và `prisma migrate deploy` (fresh-install test trên DB
+trống riêng).
 
-## KIẾN TRÚC QUYẾT ĐỊNH (ADR-013 → ADR-016, `docs/architecture/DECISIONS.md`)
+## KIẾN TRÚC QUYẾT ĐỊNH (ADR-017 → ADR-023, `docs/architecture/DECISIONS.md`)
 
-- **ADR-013** — Position là template cấp Company, KHÔNG gắn
-  `organizationUnitId` (tránh trùng lặp Position theo từng chi nhánh). Nơi
-  một người giữ vị trí nằm ở `Assignment.organizationUnitId`.
-- **ADR-014** — MỘT `WorkItem` duy nhất cho mọi loại việc (Company/Project/
-  Organization) — trực tiếp sửa lỗi "2 engine song song" (`Plan`/`PlanTask`
-  vs `ZWorkspaceTask`) của ZenithTasks.
-- **ADR-015** — Work visibility 2-tier: SELF (MEMBER/VIEWER không có
-  `work.assign` chỉ thấy việc mình tạo/được giao) vs COMPANY (MANAGER+ có
-  `work.assign` thấy toàn bộ) — cố tình đơn giản, không xây ACL per-row.
-- **ADR-016** — Không có Milestone/Checklist model riêng cho Project ở Phần
-  4 (defer tới khi có bằng chứng cần thật).
+- **ADR-017** — Lead là entity thật tách biệt khỏi Customer (bằng chứng:
+  `LEGACY_CAPABILITY_MATRIX.md` dòng L-C04), không gộp chung 1 model với
+  status field.
+- **ADR-018** — `Customer` optional trên `Appointment`/`Sale` ở mọi tầng
+  (schema/domain/UI) — hỗ trợ khách vãng lai ("Khách lẻ") không bắt buộc
+  tạo hồ sơ Customer trước.
+- **ADR-019** — KHÔNG xây Sales Opportunity/Pipeline riêng (0 evidence
+  trong ZenithTasks, Lead→Customer→Sale trực tiếp là đủ cho MVP).
+- **ADR-020** — KHÔNG xây Customer Merge (trùng lặp xử lý qua cảnh báo
+  duplicate lúc tạo, không xây workflow gộp record).
+- **ADR-021** — `SaleLine.discountAmount` là số phẳng caller nhập trực
+  tiếp, KHÔNG port rule engine `ZMechanismDefinition`/`ZMechanismVersion`
+  của ZenithTasks (xác nhận qua archaeology: DRAFT-only, chưa từng chạy
+  production thật).
+- **ADR-022** — Customer/Lead/Appointment/Sale visibility là **Company-wide
+  cho bất kỳ ai có permission `.view` tương ứng** — KHÁC HẲN WorkItem's
+  2-tier SELF/COMPANY của ADR-015 Phần 4. `ownerUserId`/`assignedUserId`
+  không tự nó là ranh giới bảo mật, permission mới là ranh giới. (Bản nháp
+  đầu tiên của ADR này copy nhầm pattern SELF-scope của WorkItem — tự phát
+  hiện và sửa lại theo đúng mục CLVI của Master Prompt TRƯỚC khi viết bất kỳ
+  dòng code nào — xem log phiên.)
+- **ADR-023** — SĐT mã hoá tại chỗ (AES-256-GCM) + hash tra cứu (SHA-256,
+  không salt — rủi ro chấp nhận được ghi rõ), KHÔNG có UI "ẩn mặc định + lộ
+  có audit" như ZenithTasks — `customer.view` + Company scope được coi là
+  đủ kiểm soát truy cập cho Phần 5 MVP.
 
-Chi tiết implementation + invariant giữ nguyên: `docs/domain/
-ORGANIZATION.md`, `WORK_CORE.md`, `PROJECT.md` (đọc trước khi sửa 3 domain
-này).
+Chi tiết implementation + invariant giữ nguyên: `docs/domain/CRM.md`,
+`CUSTOMER.md`, `LEAD.md`, `APPOINTMENT.md`, `SALES.md` (đọc trước khi sửa
+domain này — đặc biệt phần đối chiếu ADR-022 với ADR-015).
 
 ## DOMAIN SERVICE + ACTION + UI
 
-`src/lib/domain/organization-service.ts` (OrganizationUnit + Position +
-Assignment CRUD/lifecycle), `work-service.ts` (WorkItem create/assign/start/
-complete/cancel + `getMyTodayWork`/`getCompanyWork` theo ADR-015),
-`work-priority.ts` (xếp hạng "Hôm nay" thuần, timezone-aware qua
-`Intl.DateTimeFormat`, không phải lịch UTC server), `project-service.ts`
-(Project + ProjectMembership, bootstrap tự động `ProjectMembership OWNER`
-khi tạo), `scope-guards.ts` (assert cross-company FK dùng chung — hợp nhất
-sau simplicity review, trước đó 3 service tự viết lại logic giống hệt
-nhau). Server Actions: `organization-actions.ts`/`work-actions.ts`/
-`project-actions.ts` — thin wrapper, cùng pattern `company-actions.ts` Phần
-3. UI: `/c/[code]/{today,work,organization,projects,projects/[projectId]}`,
-nav cập nhật ở `company-nav.tsx`.
+`src/lib/crypto/phone.ts` (mã hoá/giải mã/hash SĐT, unit test riêng),
+`src/lib/domain/sale-totals.ts` (tính tiền Sale thuần, DB-free, unit test
+riêng — nơi xảy ra P1 tiền, xem dưới), `appointment-conflict.ts` (check
+trùng lịch thuần), `customer-service.ts`, `lead-service.ts`,
+`appointment-service.ts`, `sales-service.ts` (Catalog + Sale), `scope-guards.ts`
+mở rộng 5 assert mới. `work-service.ts` (Phần 4) mở rộng
+`getOpenWorkForCustomer`/`hasOpenWorkItemForAppointment` (idempotency check
+cho follow-up No-show). Server Actions: `customer-actions.ts`,
+`lead-actions.ts`, `appointment-actions.ts`, `sales-actions.ts` — thin
+wrapper, cùng pattern `organization-actions.ts` Phần 4 (riêng
+`sales-actions.ts` có 1 khác biệt quan trọng — xem P2 Decimal bên dưới).
+UI: `/c/[code]/{customers,customers/leads,appointments,sales,sales/catalog}`
++ trang chi tiết từng entity, nav cập nhật ở `company-nav.tsx` (chỉ 3
+top-level item mới: Khách hàng/Lịch hẹn/Kinh doanh — đúng navigation budget
+mục CXCVII, Lead/Catalog chỉ có link phụ), `today/page.tsx` tích hợp thêm
+"Lịch hẹn hôm nay" (`getMyAppointmentsToday` — ngoại lệ cố ý duy nhất của
+ADR-022, tự-scope giống WorkItem vì đây là view cá nhân "của tôi hôm nay").
 
 ## PERMISSION MỞ RỘNG
 
-`organization.view`/`organization.manage`, `people.view`/`people.assign`,
-`work.view`/`work.create`/`work.update`/`work.assign`/`work.complete`/
-`work.manage`, `project.view`/`project.create`/`project.manage`/
-`project.archive` (`src/lib/permissions/registry.ts`+`presets.ts`). MANAGER
-có `people.assign`/`work.assign`/`project.create` nhưng KHÔNG có
-`organization.manage`/`work.manage`/`project.manage`/`project.archive` —
-"xem/vận hành" và "quản trị cấu trúc" là 2 trục quyền khác nhau (đúng
-nguyên tắc Phần 3 "không hard-code Manager = Owner").
+`customer.view/create/update/archive/assign/interaction.create`,
+`lead.view/create/assign/convert`, `appointment.view/create/update/manage`,
+`sales.view/create/update/confirm/cancel`, `catalog.view/manage`
+(`src/lib/permissions/registry.ts`+`presets.ts`). Gỡ `"customer."` khỏi
+`RESERVED_PERMISSION_PREFIXES` (chỉ còn `finance.`/`payroll.`/
+`healthcare.`). `sales.manage` bị loại bỏ sau review — dead permission
+(Sale không có `canActOnX`-theo-ownership để override như
+Appointment/WorkItem, vì ADR-022 đã bỏ self-scope). `READ_ONLY_PERMISSIONS`
+(`company-context.ts`) mở rộng đúng 5 permission `.view` mới — không lặp
+lại P1 Suspended-Company của Phần 4.
 
 ## STATIC TESTS
 
 `npx tsc --noEmit` 0 lỗi · `npx eslint .` 0 lỗi/cảnh báo · `npx next build`
-PASS (10 route: `/`, `/_not-found`, `/api/health`, `/c/[code]`,
-`/c/[code]/members`, `/c/[code]/organization`, `/c/[code]/projects`,
-`/c/[code]/projects/[projectId]`, `/c/[code]/today`, `/c/[code]/work`,
-`/login`).
+PASS (19 route, thêm 9 route Phần 5: `/c/[code]/appointments`,
+`/c/[code]/appointments/[appointmentId]`, `/c/[code]/customers`,
+`/c/[code]/customers/[customerId]`, `/c/[code]/customers/leads`,
+`/c/[code]/customers/leads/[leadId]`, `/c/[code]/sales`,
+`/c/[code]/sales/[saleId]`, `/c/[code]/sales/catalog`).
 
 ## UNIT + INTEGRATION TESTS
 
-`npm run test` — **21/21 PASS** (10 cũ + 11 mới `work-priority.test.ts`:
-tier khẩn cấp, timezone-aware "hôm nay", tie-break theo hạn). `npm run
-test:integration` — **53/53 PASS** (24 cũ Phần 3 + 29 mới
-`tenant-isolation-part4.itest.ts`): cross-company FK injection trên mọi FK
-mới (parentId Unit, positionId, organizationUnitId, projectId,
-assigneeUserId, owningUnitId), Assignment cho non-member/cross-company,
-work self-serve (tự giao việc cho mình không cần `work.assign`) vs giao cho
-người khác (cần), quyền hành động 1-1 trên WorkItem (`work.manage` HOẶC
-assignee HOẶC creator), ADR-015 visibility SELF vs COMPANY, Project
-cross-company member deny, Project OWNER-membership KHÔNG tự có
-`project.archive`/`work.assign` cấp Company, Suspended Company chặn ghi ở
-cả 3 domain (kể cả sau khi vá P1 — xem dưới).
+`npm run test` — **44/44 PASS** (21 cũ + 9 `phone.test.ts` + 6
+`sale-totals.test.ts` + 5 `appointment-conflict.test.ts`, bao gồm 2 test hồi
+quy cho P1 tiền — xem dưới). `npm run test:integration` — **99/99 PASS** (53
+cũ + 46 mới `tenant-isolation-part5.itest.ts`): cross-company FK injection
+trên mọi FK mới (Lead/Customer/Interaction/Appointment/Sale/SaleLine/
+organizationUnitId/`WorkItem.customerId`+`appointmentId`), duplicate-detection
+Customer, ADR-022 Company-wide visibility (test dương tính rõ ràng: MemberA
+thấy được record của ManagerA), Lead conversion dedup/reuse/atomicity,
+Appointment conflict detection, No-show idempotent follow-up Work creation,
+Sale money/lifecycle integrity, Suspended-Company chặn ghi ở cả 4 domain
+mới, phone-encryption-at-rest (ciphertext không chứa plaintext, round-trip
+đúng qua `getCustomerDetail`).
 
-## ADVERSARIAL CODE REVIEW (2 agent độc lập)
+## ADVERSARIAL CODE REVIEW (3 agent độc lập)
 
-`docs/security/RED_TEAM_CODE_REVIEW_PART4.md`. Agent 1 (tenant-isolation
-attacker) tìm **1 P1 thật**: `updateProject`/`addProjectMember`/
-`completeProject` gate bằng `"project.view"` (để giữ nhánh Project
-OWNER-membership fallback hoạt động) — nhưng `"project.view"` nằm trong
-`READ_ONLY_PERMISSIONS` nên Company SUSPENDED/ARCHIVED không chặn được 3
-hàm này. **Đã sửa**: thêm `assertCompanyWritable()` gọi tường minh, độc lập
-với cờ `isWriteAction()`. Agent 2 (simplicity/architecture-drift) tìm 3 P2:
-duplicate assert helper (→ hợp nhất `scope-guards.ts`), `Project.startAt/
-dueAt/budgetAmount` xây xong domain mà không có UI (→ thêm
-`EditProjectForm`), UI `mayAct` thiếu nhánh creator so với
-`canActOnWorkItem()` thật (→ sửa khớp). Không còn P0/P1 mở sau khi sửa.
+`docs/security/RED_TEAM_CODE_REVIEW_PART5.md`. Agent 1 (tenant-isolation
+attacker, 8 câu hỏi): NONE khai thác được. Agent 2 (simplicity/spec-fidelity,
+11 câu hỏi): NONE — toàn bộ 7 ADR đối chiếu đúng code thật, 2 P2 nhỏ. Agent
+3 (money/PII integrity — mới, riêng cho Phần 5 vì rủi ro tiền+PII không tồn
+tại ở Phần 4, 12 câu hỏi): **tìm 2 P1 thật**.
 
-## BROWSER TESTS (3 persona thật)
+1. **P1 Money** — `calculateSaleTotals` (cũ) cộng dồn `discountAmount` THÔ
+   từng dòng rồi mới clamp 1 lần ở cấp Sale, trong khi `buildLineTotals`
+   viết tay clamp riêng từng dòng → khi 1 dòng chiết khấu vượt chính giá
+   trị dòng đó, `Sale.totalAmount` lệch với `sum(SaleLine.lineTotal)` (repro
+   cụ thể: 60.000đ vs 100.000đ thật). Đã sửa: `calculateSaleTotals` tính lại
+   để bất biến `subtotalAmount - discountAmount === totalAmount ===
+   sum(lineTotal)` đúng bằng cấu trúc; `buildLineTotals` gọi thẳng
+   `calculateLineTotal` đã unit-test thay vì công thức tay (root cause thật).
+2. **P1 PII** — `phoneCiphertext`/`phoneHash` bị over-fetch ra khỏi tầng
+   service ở mọi list/detail query KHÔNG phải `getCustomerDetail`/
+   `getLeadDetail` (6 vị trí). Chưa leak ra browser thật nhưng `phoneHash`
+   không salt trên keyspace nhỏ (SĐT VN) = gần tương đương lộ SĐT nếu rò rỉ
+   dù 1 lần. Đã sửa bằng Prisma `omit` ở cả top-level và nested `include`.
 
-Founder tạo 2 user demo (Manager, Employee) qua script tạm rồi thêm vào
-Company qua chính UI Thành viên (exercising `addCompanyMemberAction` thật).
-**Employee**: đăng nhập → Hôm nay chỉ thấy đúng 1 việc của mình → Bắt đầu →
-Hoàn thành → biến mất khỏi Hôm nay. **Manager**: đăng nhập → Cơ cấu tổ chức
-(chỉ xem, không có form tạo Unit/Position vì thiếu `organization.manage`) →
-gán Assignment cho Employee (có `people.assign`) → Công việc (thấy toàn
-Company, đúng ADR-015) → tạo task giao cho Employee. **Project Owner**:
-Manager tạo Project → tự động thành `ProjectMembership OWNER` → sửa thông
-tin dự án qua `EditProjectForm` (đơn vị chủ quản/ngày/ngân sách) → thêm
-Employee làm thành viên dự án → tạo task trong dự án giao cho Employee →
-Hoàn thành task → Hoàn thành dự án (nút biến mất đúng sau khi COMPLETED).
+Không còn P0/P1 mở sau khi sửa. Chi tiết đầy đủ + toàn bộ P2 đã sửa/chấp
+nhận: xem file review.
 
-Phát hiện và sửa 1 bug thật trong lúc test (không phải Phần 4 viết ra, phát
-hiện qua test thật): `src/app/c/[code]/members/add-member-form.tsx` (Phần
-3) gọi `e.currentTarget.reset()` sau `await` — SyntheticEvent's
-`currentTarget` đã null lúc đó, gây lỗi client dù `addCompanyMemberAction`
-backend đã thành công (member vẫn được thêm đúng, chỉ UI báo lỗi giả).
-Sửa: capture `const form = e.currentTarget` trước closure async — đúng
-pattern mọi form Phần 4 đã tự dùng sẵn từ đầu.
+## BUG THẬT THỨ 3 — PHÁT HIỆN QUA BROWSER TEST SAU REVIEW (không phải Phần 5
+review tìm ra, review đã PASS trước đó)
+
+Lúc browser-verify Journey 2 (Sales), click "Xác nhận" trên `SaleActions`
+(Client Component) không có phản ứng — console log lộ nguyên nhân thật:
+`confirmSaleAction`/`cancelSaleAction` (`sales-actions.ts`) trả thẳng object
+Prisma Sale (chứa field `Decimal` — class instance, không phải plain
+object) qua boundary Server Action → Client Component. Next.js RSC không
+serialize được `Decimal`, log lỗi "Only plain objects can be passed..." mỗi
+lần gọi — không chặn hẳn action (Sale vẫn confirm/cancel đúng trong DB) vì
+chỉ là dev-mode console.error, nhưng đây là hành vi mong manh thật, có thể
+vỡ khác đi ở production build. **Đã sửa**: 6 hàm trong `sales-actions.ts`
+không còn trả nguyên object Prisma — chỉ trả phần dữ liệu client thực sự
+cần (`createSaleAction` trả `{ id }` vì `create-sale-form.tsx` cần redirect;
+5 hàm còn lại (`createCatalogItemAction`/`updateCatalogItemAction`/
+`updateDraftSaleAction`/`confirmSaleAction`/`cancelSaleAction`) không trả gì
+vì không caller nào dùng giá trị trả về — xác nhận bằng grep toàn bộ
+`src/app`). Re-verify: tạo/xác nhận/huỷ 1 Sale test mới sau khi sửa, 0
+console error. `npx tsc`/`npx eslint`/`npm run test`/`npm run
+test:integration`/`npx next build` chạy lại toàn bộ sau sửa, đều PASS.
+
+## BROWSER TESTS (3 journey bắt buộc, Manager persona)
+
+**Journey 1 — Reception/Sales (mục CLXXXVIII):** Tạo Customer "Trần Thị
+Mai" (SĐT `0912345678`) → chuyển tới trang chi tiết, SĐT giải mã hiển thị
+đúng plaintext (xác nhận round-trip AES-256-GCM thật, không chỉ unit test)
+→ "Tạo lịch hẹn" quick-action mang theo `customerId` → tạo Appointment → xuất
+hiện đúng trong danh sách Lịch hẹn → xuất hiện đúng trong "Hôm nay" phần
+"Lịch hẹn hôm nay" (tích hợp Today/Appointment thật, mục CVII/CLXXXVI).
+
+**Journey 2 — Sales (mục CLXXXIX):** Từ Customer → "Tạo giao dịch" mang
+theo `customerId` → thêm dòng hàng tự nhập ("Khám tổng quát", 500.000đ) →
+Tạo giao dịch (redirect đúng sang trang chi tiết Sale) → Xác nhận (DRAFT →
+CONFIRMED, đúng tiền, đúng timestamp) → quay lại Customer detail, mục "Giao
+dịch" hiển thị đúng Sale vừa xác nhận. (Đây là journey phát hiện bug Decimal
+ở trên — sửa xong mới coi là hoàn tất, không fake PASS.)
+
+**Journey 3 — Follow-up (mục CXC):** Appointment (Journey 1) → "Không đến"
+(No-show) → follow-up WorkItem tự động xuất hiện trong "Việc của tôi hôm
+nay" ("Theo dõi khách không đến hẹn: ...", ưu tiên Cao) → Bắt đầu → Hoàn
+thành → biến mất khỏi danh sách việc mở (đúng vòng đời WorkItem Phần 4,
+xác nhận tích hợp CRM↔Work Core hoạt động thật end-to-end qua UI thật).
 
 ## FRESH DB TEST
 
-Tạo database trống riêng (`tapdoanytedalinhvuc_fresh_test`, không đụng DB
-dev đang có dữ liệu thật) → `prisma migrate deploy` áp cả 2 migration sạch
-→ `bootstrap-founder` chạy thành công → xoá DB tạm. Không dùng `docker
-compose down -v` lần này vì DB dev hiện đang giữ dữ liệu browser-test hữu
-ích cho Phần 5 (Founder + Company + 2 demo user + Assignment + Project mẫu)
-— khác cách làm "xoá volume" của checkpoint Phần 3 vì lúc đó DB dev chỉ có
-dữ liệu bootstrap tạm, không đáng giữ.
+Tạo database trống riêng → `prisma migrate deploy` áp toàn bộ 3 migration
+sạch (Phần 3+4+5) → `bootstrap-founder` chạy thành công → xoá DB tạm. DB dev
+chính giữ nguyên dữ liệu browser-test Phần 4+5 (Founder + Company + demo
+user + Assignment + Project + Customer/Appointment/Sale mẫu) — hữu ích cho
+Phần 6 (Finance cần Sale đã CONFIRMED để test công nợ/thanh toán).
 
-## SECURITY RISKS (còn mở, kế thừa từ Phần 3, không phải HARD BLOCK)
+## SECURITY RISKS (còn mở, kế thừa từ Phần 3/4, không phải HARD BLOCK)
 
 1. `AuditEvent` chưa có DB-level trigger chống UPDATE/DELETE trực tiếp.
 2. Không có session revocation list/tokenVersion.
-3. Composite FK/DB constraint cho Finance/Healthcare chưa áp dụng (domain
-   đó chưa tồn tại) — nhắc Phần 6/7 không quên.
+3. `phoneHash` (SHA-256, không salt) trên keyspace SĐT VN nhỏ — rủi ro
+   dictionary-attack nếu hash bị lộ; chấp nhận cho MVP, cần salt hoặc HMAC
+   với secret riêng nếu Phần 6+ mở API/export dùng field này.
+4. Composite FK/DB constraint cho Finance/Healthcare chưa áp dụng (domain đó
+   chưa tồn tại) — nhắc Phần 6/7 không quên.
 
 ## DEFERRED ITEMS
 
-Customer/Appointment/Sale/Finance/Payroll/Inventory/Healthcare (Phần 5+) ·
-Milestone/Checklist model riêng cho Project (ADR-016, thêm khi có bằng
-chứng cần) · OrganizationUnit move/reparent UI (chỉ tạo/archive, chưa sửa
-cây) · `useFormAction` shared hook (mọi form vẫn viết inline, nhất quán
-nhưng chưa DRY — xem Salvage Ledger) · role builder UI · email invitation
-service.
+Sales Opportunity/Pipeline (ADR-019) · Customer Merge (ADR-020) · rule
+engine chiết khấu (ADR-021) · "ẩn SĐT mặc định + lộ có audit" UI (ADR-023) ·
+`updateDraftSale` — domain function tồn tại, CỐ Ý chưa có UI caller ở Phần
+5 (ghi rõ trong `SALES.md`, không phải thiếu sót) · Finance/Payroll/
+Commission/Inventory/Healthcare (Phần 6+) · Milestone/Checklist riêng cho
+Project (ADR-016, Phần 4) · OrganizationUnit move/reparent UI.
 
-## DO NOT REDO (bổ sung Phần 4, kế thừa toàn bộ danh sách Phần 3)
+## DO NOT REDO (bổ sung Phần 5, kế thừa toàn bộ danh sách Phần 3+4)
 
-- Không thêm `organizationUnitId` vào `Position` (ADR-013).
-- Không tạo engine việc thứ 2 cho bất kỳ domain nào (ADR-014) — mọi "task
-  giống nhau" đều là `WorkItem`.
-- Không để Project OWNER-membership (per-project) tự mở rộng thành quyền
-  cấp Company (`project.archive`, `work.assign`, v.v.) — 2 đường quyền này
-  cố tình tách biệt, xem `docs/domain/PROJECT.md`.
-- Không gate một hàm ghi dữ liệu (mutation) bằng permission nằm trong
-  `READ_ONLY_PERMISSIONS` (`company-context.ts`) mà không tự thêm check
-  `company.status === "ACTIVE"` tường minh — đây chính là root cause của P1
-  vừa vá ở Phần 4.
-- Không truy cập `e.currentTarget` bên trong closure async SAU một `await`
-  trong `onSubmit` handler — luôn capture biến thường (`const form =
-  e.currentTarget`) trước khi vào `startTransition(async () => {...})`.
-- Không thiết kế lại authorization foundation Phần 3 — vẫn đúng nguyên vẹn,
-  Phần 4 chỉ build domain mới TRÊN nền đó.
+- Không tự-scope (self-scope) visibility Customer/Lead/Appointment/Sale
+  theo `ownerUserId`/`assignedUserId` — ADR-022 là Company-wide theo
+  permission `.view`, CỐ Ý khác WorkItem (ADR-015). Ngoại lệ duy nhất đã
+  chốt: `getMyAppointmentsToday` (view cá nhân "của tôi hôm nay", không
+  phải authorization boundary).
+- Không thêm quan hệ Customer/Lead vào `include`/`select` mà thiếu `omit: {
+  phoneCiphertext: true, phoneHash: true }` — CHỈ `getCustomerDetail`/
+  `getLeadDetail` được chạm 2 field này (và phải strip khỏi return value
+  bằng destructure trước khi trả ra ngoài service layer).
+- Không tính `SaleLine.lineTotal`/`Sale.totalAmount` bằng công thức viết tay
+  riêng — LUÔN gọi `calculateLineTotal`/`calculateSaleTotals`
+  (`sale-totals.ts`) đã unit-test; không clamp discount ở cấp Sale tách rời
+  khỏi clamp cấp dòng — đây chính là root cause P1 tiền vừa vá.
+- Không để Server Action (đặc biệt trong `src/lib/actions/*.ts`) trả thẳng
+  object Prisma chứa field `Decimal` qua boundary Server→Client — chỉ trả
+  phần dữ liệu client thực sự dùng (thường chỉ cần `{ id }` hoặc không cần
+  trả gì nếu caller chỉ gọi `router.refresh()`).
+- Không port rule engine `ZMechanismDefinition`/`ZMechanismVersion` của
+  ZenithTasks (ADR-021) — DRAFT-only, chưa từng chạy production thật.
+- Không tạo model Customer Merge hoặc Sales Opportunity/Pipeline riêng
+  (ADR-019/ADR-020) trừ khi có bằng chứng nghiệp vụ thật mới.
+- Không thiết kế lại authorization foundation Phần 3 hay Work Core Phần 4 —
+  Phần 5 chỉ mở rộng `WorkItem` bằng 2 field optional, không tạo engine
+  việc thứ 2 (ADR-014 vẫn áp dụng).
 
 ## NEXT
 
-Phần 5 — CRM + Sales + Generic Operations. Xem `docs/project/CURRENT_WAVE.md`
-để biết input đã sẵn sàng.
+Phần 6 — Finance + Payroll + Commission + Inventory. Xem
+`docs/project/CURRENT_WAVE.md` để biết input đã sẵn sàng.

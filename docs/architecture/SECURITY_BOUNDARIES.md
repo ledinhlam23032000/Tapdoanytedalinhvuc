@@ -109,6 +109,20 @@ lặp lại việc trộn "quyền kỹ thuật" với "quyền chủ doanh nghi
 ở ZenithTasks (ADMIN legacy vừa là quyền vận hành vừa bị dùng làm superuser
 đa tenant).
 
+## Cập nhật Phần 5 — CRM/Sales/Appointment permission thật
+
+Permission conceptual Phần 2 ở trên (`customer.view`/`customer.manage`) đã
+implement thật ở Phần 5 với độ chi tiết khác đôi chút so với bản nháp: thay
+vì 1 `customer.manage` gộp, tách thành `customer.create`/`update`/
+`archive`/`assign`/`interaction.create` (mục LXXXV: "đừng tạo hàng trăm
+permission" nhưng vẫn cần tách `assign`/`archive` riêng vì đây là 2 hành
+động rủi ro cao hơn create/update thường, giữ ở tier MANAGER trở lên). Thêm
+mới ngoài dự kiến Phần 2: `lead.*`, `appointment.*`, `sales.*`, `catalog.*`
+— xem `docs/domain/CRM.md` và ADR-017 đến ADR-023
+(`docs/architecture/DECISIONS.md`) cho lý do đầy đủ. SĐT Customer/Lead mã
+hoá AES-256-GCM tại rest (ADR-023) — `src/lib/crypto/phone.ts`, khoá
+`PHONE_ENC_KEY` không commit, không dùng chung giá trị với ZenithTasks.
+
 ## Red-team review
 
 Xem `docs/architecture/RED_TEAM_REVIEW.md` — kết quả review đối kháng thiết

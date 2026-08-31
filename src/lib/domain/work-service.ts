@@ -4,7 +4,13 @@ import { requireCompanyContextForActor } from "@/lib/authorization/company-conte
 import { AuthorizationError } from "@/lib/authorization/errors";
 import { recordAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { sortByUrgency } from "@/lib/domain/work-priority";
-import { assertSameCompanyOrganizationUnit, assertSameCompanyProject, assertActiveCompanyMember } from "@/lib/domain/scope-guards";
+import {
+  assertSameCompanyOrganizationUnit,
+  assertSameCompanyProject,
+  assertActiveCompanyMember,
+  assertSameCompanyCustomer,
+  assertSameCompanyAppointment,
+} from "@/lib/domain/scope-guards";
 import type { CompanyPermission } from "@/lib/permissions/registry";
 import type { WorkItem } from "@/generated/prisma";
 
@@ -35,6 +41,8 @@ const createWorkItemSchema = z.object({
   companyId: z.string().min(1),
   organizationUnitId: z.string().min(1).optional(),
   projectId: z.string().min(1).optional(),
+  customerId: z.string().min(1).optional(),
+  appointmentId: z.string().min(1).optional(),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(4000).optional(),
   priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).default("NORMAL"),
@@ -54,6 +62,8 @@ export async function createWorkItem(actorId: string, input: z.input<typeof crea
   }
   if (parsed.organizationUnitId) await assertSameCompanyOrganizationUnit(company.id, parsed.organizationUnitId);
   if (parsed.projectId) await assertSameCompanyProject(company.id, parsed.projectId);
+  if (parsed.customerId) await assertSameCompanyCustomer(company.id, parsed.customerId);
+  if (parsed.appointmentId) await assertSameCompanyAppointment(company.id, parsed.appointmentId);
 
   return db.$transaction(async (tx) => {
     const item = await tx.workItem.create({
@@ -61,6 +71,8 @@ export async function createWorkItem(actorId: string, input: z.input<typeof crea
         companyId: company.id,
         organizationUnitId: parsed.organizationUnitId,
         projectId: parsed.projectId,
+        customerId: parsed.customerId,
+        appointmentId: parsed.appointmentId,
         title: parsed.title,
         description: parsed.description,
         priority: parsed.priority,
@@ -229,4 +241,26 @@ export async function getCompanyWork(
     include: { assignee: true, project: true, organizationUnit: true },
     orderBy: { createdAt: "desc" },
   });
+}
+
+/** Việc đang mở (chưa DONE/CANCELLED) gắn với 1 Customer — Customer detail
+ * derive "next action" từ đây (mục CXIII/CLXXXVII), không lưu trùng. */
+export async function getOpenWorkForCustomer(actorId: string, companyId: string, customerId: string) {
+  await requireCompanyContextForActor(actorId, companyId, "work.view");
+  return db.workItem.findMany({
+    where: { companyId, customerId, status: { in: ["TODO", "IN_PROGRESS"] } },
+    include: { assignee: true },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+/** Idempotency cho follow-up tự động (mục CLXXXV): đã có WorkItem đang mở
+ * cho đúng Appointment này chưa — dùng để không tạo trùng khi xử lý lại
+ * cùng 1 sự kiện No-show. */
+export async function hasOpenWorkItemForAppointment(companyId: string, appointmentId: string): Promise<boolean> {
+  const existing = await db.workItem.findFirst({
+    where: { companyId, appointmentId, status: { in: ["TODO", "IN_PROGRESS"] } },
+    select: { id: true },
+  });
+  return existing !== null;
 }

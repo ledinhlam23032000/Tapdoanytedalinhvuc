@@ -102,6 +102,11 @@ const READ_ONLY_PERMISSIONS: ReadonlySet<CompanyPermission> = new Set([
   "people.view",
   "work.view",
   "project.view",
+  "customer.view",
+  "lead.view",
+  "appointment.view",
+  "sales.view",
+  "catalog.view",
 ]);
 
 function isWriteAction(permission: CompanyPermission): boolean {

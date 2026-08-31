@@ -1,7 +1,7 @@
 {
   "project": "Tapdoanytedalinhvuc",
-  "phase": "part-4-complete",
-  "currentWave": "part-5-not-started",
+  "phase": "part-5-complete",
+  "currentWave": "part-6-not-started",
   "lastCheckpoint": "docs/checkpoints/LATEST.md",
   "legacySourceHead": "e420e3809b788f4f130db082dd798fe5e9e71b3a",
   "targetHead": "0230074",
@@ -45,16 +45,41 @@
     "part4-architecture-docs-updated-target-architecture-domain-model-data-ownership-tenant-invariants-legacy-to-target-map-salvage-ledger",
     "part4-red-team-review-doc-security-red-team-code-review-part4",
     "part4-browser-journeys-verified-employee-manager-project-owner",
-    "part4-fresh-db-install-test-verified"
+    "part4-fresh-db-install-test-verified",
+    "part5-prisma-schema-customersource-lead-customer-customerinteraction-appointment-catalogitem-sale-saleline",
+    "part5-workitem-extended-with-optional-customerid-appointmentid-adr014-preserved",
+    "part5-phone-pii-encryption-aes-256-gcm-with-sha256-lookup-hash-adr023",
+    "part5-sale-totals-pure-money-module-unit-tested",
+    "part5-appointment-conflict-pure-module-unit-tested",
+    "part5-customer-service-lead-service-appointment-service-sales-service",
+    "part5-scope-guards-extended-5-new-cross-company-asserts",
+    "part5-server-actions-customer-lead-appointment-sales",
+    "part5-ui-customers-leads-appointments-sales-catalog",
+    "part5-today-integration-appointments-today-section",
+    "part5-company-nav-updated-3-new-top-level-items-navigation-budget-respected",
+    "part5-permission-registry-presets-customer-lead-appointment-sales-catalog",
+    "part5-unit-tests-44-pass",
+    "part5-integration-tests-tenant-isolation-part5-46-new-99-total-pass",
+    "part5-anti-pattern-search-clean",
+    "part5-adversarial-code-review-3-agents-2-p1-found-and-fixed-money-and-pii",
+    "part5-p1-fix-sale-totals-discount-clamping-mismatch-vs-sum-of-line-totals",
+    "part5-p1-fix-phone-ciphertext-hash-omit-on-6-list-detail-query-sites",
+    "part5-p2-fix-decimal-object-crossing-server-action-client-boundary-in-sales-actions",
+    "part5-adr-017-through-023-lead-real-entity-customer-optional-no-opportunity-no-merge-no-rule-engine-company-wide-visibility-phone-encrypted-no-reveal-audit",
+    "part5-domain-docs-crm-customer-lead-appointment-sales",
+    "part5-architecture-docs-updated-target-architecture-domain-model-data-ownership-tenant-invariants-legacy-to-target-map-salvage-ledger-authorization-model",
+    "part5-red-team-review-doc-security-red-team-code-review-part5",
+    "part5-browser-journeys-verified-reception-sales-sales-transaction-followup-noshow",
+    "part5-fresh-db-install-test-verified"
   ],
   "inProgress": [],
   "blocked": [],
   "next": [
-    "part-5-crm-sales-generic-operations",
-    "part-5-read-master-prompt-part-5-section-via-pandoc-grep",
-    "part-5-implement-customer-appointment-sale-schema",
-    "part-5-open-customer-permission-namespace-checks",
-    "part-5-decide-whether-appointment-follow-up-generates-workitem-automatically-or-stays-separate"
+    "part-6-finance-payroll-commission-inventory",
+    "part-6-read-master-prompt-part-6-section-via-pandoc-grep",
+    "part-6-implement-invoice-payment-debt-payroll-commission-inventory-schema",
+    "part-6-decide-whether-sale-confirmed-generates-invoice-automatically-or-stays-separate-evidence-gated",
+    "part-6-decide-commission-calculation-source-of-truth-vs-legacy-zmechanism-evidence-gated"
   ],
   "doNotRedo": [
     "do-not-re-read-full-docx-files-again-use-docs-summaries",
@@ -72,6 +97,12 @@
     "do-not-let-project-owner-membership-grant-company-wide-permissions-project-archive-work-assign-etc-stay-scoped-to-that-project-only",
     "do-not-gate-a-mutation-function-on-a-permission-that-is-in-read-only-permissions-in-company-context-ts-without-adding-an-explicit-assertcompanywritable-style-check-see-part4-p1-fix",
     "do-not-access-e-currenttarget-after-an-await-inside-a-form-onsubmit-handler-capture-const-form-e-currenttarget-before-the-async-closure",
-    "do-not-give-project-a-customer-ledger-payroll-model-or-its-own-authorization-root-project-is-not-company-see-docs-domain-project-md"
+    "do-not-give-project-a-customer-ledger-payroll-model-or-its-own-authorization-root-project-is-not-company-see-docs-domain-project-md",
+    "do-not-self-scope-customer-lead-appointment-sale-visibility-by-owneruserid-assigneduserid-adr022-is-company-wide-by-design-unlike-workitem-adr015-except-getmyappointmentstoday",
+    "do-not-add-a-customer-or-lead-relation-to-any-prisma-include-select-without-omit-phoneciphertext-true-phonehash-true-only-getcustomerdetail-getleaddetail-may-touch-those-fields",
+    "do-not-hand-write-sale-line-total-or-sale-total-formulas-always-call-calculatelinetotal-calculatesaletotals-from-sale-totals-ts-do-not-clamp-discount-at-sale-level-separately-from-line-level",
+    "do-not-return-a-raw-prisma-object-containing-decimal-fields-from-a-server-action-to-a-client-component-react-server-components-cannot-serialize-decimal-return-only-the-plain-fields-the-caller-actually-uses",
+    "do-not-port-zenithtasks-zmechanismdefinition-zmechanismversion-discount-rule-engine-adr021-confirmed-draft-only-never-ran-in-production",
+    "do-not-build-a-separate-sales-opportunity-pipeline-model-or-a-customer-merge-workflow-without-new-concrete-business-evidence-adr019-adr020"
   ]
 }

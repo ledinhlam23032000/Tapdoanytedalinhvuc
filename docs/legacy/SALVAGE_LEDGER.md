@@ -38,6 +38,18 @@ số lượng form tiếp tục tăng ở Phần 5+, nên extract `useFormAction
 đó thay vì tiếp tục copy-paste — không làm ngay bây giờ vì chưa có bằng
 chứng trùng lặp đủ đau (mục CXXIX: không xây abstraction trước khi cần).
 
+## Cập nhật Phần 5
+
+Pattern "Mã hoá SĐT AES-256-GCM + reveal có audit" (L-P04, đã ghi trong
+bảng pattern kỹ thuật bên dưới từ Phần 1) — **đã áp dụng thật** ở Phần 5:
+`src/lib/crypto/phone.ts` (viết mới, không copy code/khoá). Phần "reveal có
+audit" KHÔNG salvage — ADR-023 giải thích lý do (Phần 5 không yêu cầu tường
+minh, quyền `customer.view` + Company scope đã là lớp kiểm soát đủ cho MVP).
+Pattern "Today Workqueue" (`lib/workqueue.ts`, đã salvage triết lý ở Phần 4
+cho `work-priority.ts`) tiếp tục mở rộng ở Phần 5: `getMyAppointmentsToday`
++ No-show → follow-up Work nối vào đúng `createWorkItem()` đã có, không tạo
+nguồn tín hiệu Today riêng cho CRM.
+
 ## Tuyệt đối KHÔNG copy (secrets — chỉ ghi path, không mở/không quote nội dung)
 
 Xác nhận có tồn tại trong `ZenithTasks` (path only, chưa từng mở):

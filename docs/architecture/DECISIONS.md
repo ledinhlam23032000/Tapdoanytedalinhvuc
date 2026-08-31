@@ -249,3 +249,152 @@ sau khi có nhu cầu thật rẻ hơn nhiều so với gánh một model không
 
 **Hệ quả:** `docs/domain/PROJECT.md` ghi rõ đây là DEFERRED, không phải bỏ
 sót — thêm lại khi Project thật cần mốc tiến độ tách biệt khỏi task.
+
+## ADR-017 — Lead là entity thật, tách khỏi Customer (không dùng Customer+lifecycle)
+
+**Quyết định:** Implement `Lead` như một model Prisma riêng biệt, với luồng
+Lead → (qualify) → convert → `Customer`. Không dồn Lead vào một field
+lifecycle trên chính `Customer`.
+
+**Vì sao:** Master Prompt Phần 5 mục IX-X bắt buộc chốt quyết định này bằng
+evidence, không suy đoán. Bằng chứng thật từ khảo cổ Phần 1
+(`docs/legacy/LEGACY_CAPABILITY_MATRIX.md` dòng L-C04): ZenithTasks có
+`Customer` VÀ `Lead` là 2 model tách biệt thật trong production
+(`schema.prisma:402-445` Customer, `:464` Lead), có cổng khách công khai
+(`/khach-tham-khao`), có test riêng (`leads.test.ts`). Đây chính xác là
+"bằng chứng khối lượng lead thật, chưa xác minh, chưa phải khách hàng"
+mà mục IX yêu cầu trước khi chọn "LEAD RIÊNG" thay vì "CUSTOMER +
+LIFECYCLE". Không tìm thấy entity "Opportunity" nào tương ứng trong toàn bộ
+khảo cổ (xem ADR-019) — khác biệt rõ với Lead.
+
+**Hệ quả:** `Lead` không bao giờ bị xoá sau khi convert (giữ lịch sử, mục
+XIII). Conversion là 1 transaction: tạo/tái dùng `Customer`, giữ nguyên
+`sourceId`/`ownerUserId`, đánh dấu Lead `CONVERTED`, ghi audit
+(`LEAD_CONVERTED`). `docs/domain/LEAD.md` mô tả chi tiết.
+
+## ADR-018 — Customer là optional trên Appointment và Sale
+
+**Quyết định:** `Appointment.customerId` và `Sale.customerId` đều nullable.
+
+**Vì sao:** Mục XLIV/LXXX Master Prompt đặt câu hỏi trực tiếp, để mở, yêu
+cầu quyết định dựa trên product requirement thay vì giả định chung. Company
+generic (không riêng y tế) hoàn toàn có thể dùng Appointment cho mục đích
+nội bộ (họp, demo nội bộ) hoặc Sale walk-in không cần định danh khách ngay
+lúc bán — bắt buộc `customerId` sẽ chặn các use case hợp lệ này mà không có
+bằng chứng thật nào yêu cầu chặn. Nhất quán với chính nguyên tắc "không áp
+đặt giả định generic không có bằng chứng" lặp lại nhiều lần trong Phần 5.
+
+**Hệ quả:** UI tạo Appointment/Sale luôn hiển thị chọn khách hàng nhưng
+không bắt buộc submit. Nếu một Company cụ thể (vd Bệnh viện Hồng Phúc) cần
+bắt buộc customer, thực hiện ở tầng validation Company-cấu-hình sau này
+(chưa cần ở Phần 5), không sửa lại schema.
+
+## ADR-019 — Không implement Sales Opportunity ở Phần 5
+
+**Quyết định:** Không tạo model `SalesOpportunity`. `Customer.journeyStage`
++ `Sale` là đủ để trả lời "khách đang ở đâu" và "đã mua gì".
+
+**Vì sao:** Mục XXXIX-XLI đánh dấu Opportunity là OPTIONAL, yêu cầu kiểm tra
+legacy trước khi build. Khảo cổ Phần 1 xác nhận: `grep -i opportunity` trên
+toàn bộ `LEGACY_CAPABILITY_MATRIX.md` và `LEGACY_TO_TARGET_MAP.md` — **0
+kết quả**. Không một khách hàng thật, một dòng code, hay một test nào của
+ZenithTasks nhắc tới khái niệm "cơ hội bán hàng chưa chốt" tách rời khỏi
+Customer/Sale. Xây Opportunity lúc này đúng dạng "CRM enterprise ceremony"
+mục XXXIX tự cảnh báo.
+
+**Hệ quả:** Nếu sau này có Company thật cần theo dõi "deal trị giá X đang
+đàm phán, chưa chốt", thêm `SalesOpportunity` lúc đó kèm ADR mới — không
+pre-bake trước.
+
+## ADR-020 — Không implement Customer Merge ở Phần 5
+
+**Quyết định:** Không xây tính năng gộp 2 Customer trùng lặp. Trùng lặp chỉ
+cảnh báo (duplicate-warning UX theo `normalizedPhone`), không tự động/thủ
+công gộp.
+
+**Vì sao:** Mục XIX chỉ yêu cầu Merge "nếu legacy thực sự có duplicate
+nhiều". Khảo cổ Phần 1 không định lượng được khối lượng duplicate thật của
+Customer legacy (không có số liệu cụ thể trong `LEGACY_CAPABILITY_MATRIX.md`
+dòng L-C04) — không đủ bằng chứng để build một tính năng có rủi ro dữ liệu
+cao (gộp sai = mất lịch sử). Đúng nguyên tắc "không xây trước khi có bằng
+chứng cần" đã áp dụng nhất quán từ Phần 2.
+
+**Hệ quả:** Trùng `normalizedPhone` trong cùng Company chỉ hiện cảnh báo
+"Có thể khách hàng này đã tồn tại" khi tạo Customer mới — nhân viên tự
+quyết định tạo tiếp hay dùng lại record cũ. Thêm Merge thật khi có bằng
+chứng khối lượng cụ thể từ Company đang vận hành.
+
+## ADR-021 — Sale discount là số tiền cố định trên từng dòng, không port Mechanism engine
+
+**Quyết định:** `SaleLine.discountAmount` là số tiền VND cố định do người
+tạo Sale nhập trực tiếp trên từng dòng. Không port `ZMechanismDefinition`/
+`ZMechanismVersion` (rule engine hoa hồng/chiết khấu) của ZenithTasks vào
+Phần 5.
+
+**Vì sao:** Mục LXXVII/LXXVIII/CCXLIV yêu cầu kiểm tra legacy trước khi
+quyết định có discount rule nào cần giữ, và cấm tuyệt đối tự động port
+Mechanism engine. Khảo cổ Phần 1 (`LEGACY_TO_TARGET_MAP.md` dòng
+`ZMechanismDefinition`/`ZMechanismVersion`) đã xác nhận: engine này ở
+ZenithTasks **DRAFT-only theo thiết kế, chưa từng nối vào Sale/Payroll
+thật** — không phải logic nghiệp vụ đã chứng minh, mà là guardrail chưa
+kích hoạt. Port một engine chưa từng chạy thật vào Sale mới đúng dạng
+"xây trước khi có bằng chứng cần" — vi phạm chính nguyên tắc CLAUDE.md.
+Hoa hồng thật (bác sĩ 8%/10%, tư vấn viên theo bậc — L-C07) vẫn là tài sản
+quý, nhưng thuộc phạm vi Payroll Phần 6, không phải Sales Phần 5 (mục
+LXXIX: Sale chỉ giữ dữ liệu attribution, không tự tính hoa hồng).
+
+**Hệ quả:** Sale/SaleLine giữ đủ dữ liệu attribution (`salespersonUserId`,
+`unitPrice`, `discountAmount`, `lineTotal`) để Phần 6 tính hoa hồng sau này
+mà không cần sửa schema Sales. Nếu Mechanism engine thật sự cần, salvage lại
+ở Phần 6 kèm bằng chứng nối vào Payroll cụ thể.
+
+## ADR-022 — CRM/Appointment/Sales visibility là Company-wide theo permission, KHÔNG theo ownerUserId
+
+**Quyết định:** `customer.view`/`appointment.view`/`sales.view` cấp quyền
+xem **toàn bộ** record của Company — KHÔNG lọc theo `ownerUserId`/
+`assignedUserId`/`salespersonUserId`. Owner/assignee/salesperson chỉ là dữ
+liệu thuộc tính nghiệp vụ (ai đang phụ trách), không phải ranh giới truy
+cập. Đây KHÔNG phải cùng pattern với `WorkItem` (ADR-015).
+
+**Vì sao:** Mục CLVI nói thẳng, không mập mờ: *"customer.ownerUserId does
+not by itself define a security boundary — the permission system decides
+visibility."* Đây là chỉ dẫn ngược hẳn với ADR-015 (nơi MEMBER chỉ thấy
+`WorkItem` của chính mình) — và có lý do nghiệp vụ rõ ràng: lễ tân cần trả
+lời điện thoại cho BẤT KỲ khách nào gọi tới, không chỉ khách "của mình";
+nhân viên bán hàng cần thấy toàn bộ khách/lịch hẹn để tránh liên hệ trùng 1
+khách 2 lần. Mục CLIV/CLV chỉ cho phép UNIT-based filter là khả năng tương
+lai tuỳ chọn ("nếu có bằng chứng thật"), không phải hành vi mặc định hạn
+chế như Work Core.
+
+**Hệ quả:** `getCustomerList`/`getAppointments`/`getSales` trả về toàn bộ
+record của Company cho bất kỳ actor nào có đúng `.view` permission — không
+có `scopeFilter` kiểu `getCompanyWork()`. UI có thể cho lọc "của tôi" như 1
+filter tiện lợi (query param client chọn), không phải security boundary
+server áp đặt. Nếu sau này có Company thật cần giới hạn theo Unit/Team,
+thêm UNIT-level filter kèm ADR mới — không pre-bake.
+
+## ADR-023 — Customer.phone mã hoá tại rest, không có cơ chế "reveal có audit" riêng ở Phần 5
+
+**Quyết định:** `Customer` lưu `phoneCiphertext` (AES-256-GCM) +
+`phoneHash` (SHA-256 của số đã chuẩn hoá, dùng để tra trùng) thay vì lưu số
+điện thoại dạng plaintext. Không xây cơ chế ẩn-số-mặc-định + nút "hiện số"
+có audit riêng như legacy.
+
+**Vì sao:** `docs/architecture/DATA_OWNERSHIP.md` (Phần 2) đã chốt Customer
+PII ở mức **Cao**, và khảo cổ Phần 1 xác nhận ZenithTasks có pattern mã hoá
+SĐT AES-256-GCM thật đang chạy production (L-P04, L-C04
+`phoneEnc`/`phoneHash`) — đáng salvage nguyên pattern (không copy code/khoá)
+để chống lộ PII qua backup/dump DB thô. Tuy nhiên bản thân văn bản Phần 5 (đã
+đọc toàn bộ, không chỉ suy đoán) **không** yêu cầu thêm cơ chế "reveal có
+audit" — chỉ yêu cầu (mục CLVIII/CLIX) không log số đầy đủ và audit metadata
+dùng ID thay vì dump nguyên Customer. Quyền xem Customer (qua
+`customer.view` + Company scope, đã audit ở tầng CompanyMembership) đã là
+lớp kiểm soát truy cập cho việc dùng số điện thoại hàng ngày (gọi khách) —
+thêm 1 lớp "reveal audit" riêng nữa là over-engineering không có yêu cầu cụ
+thể trong chính Phần 5.
+
+**Hệ quả:** `src/lib/crypto/phone.ts` cung cấp `normalizePhone`,
+`hashPhone`, `encryptPhone`/`decryptPhone`. Mọi đọc Customer hợp lệ (đã qua
+`customer.view` + Company scope) tự động thấy số đã giải mã — không có bước
+"reveal" riêng. Nếu sau này có yêu cầu compliance cụ thể (vd audit trail chi
+tiết hơn cho việc xem PII), thêm khi có bằng chứng, không pre-bake.

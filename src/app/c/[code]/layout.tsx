@@ -44,6 +44,9 @@ export default async function CompanyLayout({
         canViewWork={ctx.permissions.has("work.view")}
         canViewOrganization={ctx.permissions.has("organization.view")}
         canViewProjects={ctx.permissions.has("project.view")}
+        canViewCustomers={ctx.permissions.has("customer.view")}
+        canViewAppointments={ctx.permissions.has("appointment.view")}
+        canViewSales={ctx.permissions.has("sales.view")}
       />
       {children}
     </div>

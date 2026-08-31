@@ -37,6 +37,15 @@ Các dòng Organization/Project/Work ở trên đã implement đúng ownership s
 có delta. Xem `docs/domain/ORGANIZATION.md`/`WORK_CORE.md`/`PROJECT.md` cho
 chi tiết thật.
 
+## Cập nhật Phần 5
+
+Dòng CRM/Sales ở trên (Customer/Appointment/Sale) đã implement đúng owner
+scope + attribution đã ghi. Bổ sung: `Lead` (Company-owned, không có trong
+bảng gốc — ADR-017), `CustomerInteraction` (Company-owned qua Customer),
+`CatalogItem` (Company-owned), `SaleLine` (owned qua Sale). Sensitivity
+Customer PII vẫn **Cao** như đã chốt — thực hiện bằng mã hoá tại rest
+(ADR-023), không phải chỉ ghi chú suông nữa.
+
 ## Ghi chú UNKNOWN (không có ở core entity quan trọng — quality gate CXXX)
 
 Không có UNKNOWN ở core entity (Ecosystem/Company/Membership/Organization/

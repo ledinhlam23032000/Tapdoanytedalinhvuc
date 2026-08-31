@@ -1,5 +1,16 @@
 # Target Architecture
 
+## Cập nhật Phần 5 (CRM + Sales + Appointment + Customer Operations — IMPLEMENTED)
+
+`Customer`/`Lead`/`CustomerInteraction`/`Appointment`/`CatalogItem`/`Sale`/
+`SaleLine` implement thật trên nền Company/Work Core đã có — không mở
+boundary tenant mới, không có entity nào thuộc Project. Khác biệt kiến trúc
+đáng chú ý so với Work Core (Phần 4): visibility CRM là **Company-wide theo
+permission**, không tự-scope theo owner (ADR-022 — ngược với ADR-015 của
+WorkItem, xem lý do trong `docs/domain/CRM.md`). Chi tiết:
+`docs/domain/CRM.md`, `CUSTOMER.md`, `LEAD.md`, `APPOINTMENT.md`,
+`SALES.md`. ADR-017 đến ADR-023 trong `DECISIONS.md`.
+
 ## Cập nhật Phần 4 (Organization + Work Core + Project — IMPLEMENTED)
 
 Organization/Work Core/Project (mô tả conceptual bên dưới ở "Org Unit

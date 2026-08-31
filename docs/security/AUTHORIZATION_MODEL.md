@@ -127,3 +127,19 @@ Position/Assignment (Part 4), Work/Project (Part 4), CRM/Finance/Healthcare
 permissions (reserved namespace only, chưa implement check), role builder
 UI, email invitation service, break-glass access, user impersonation, hard
 delete Company có dữ liệu.
+
+## Cập nhật Phần 5 — CRM/Sales/Appointment dùng nguyên cơ chế Phần 3
+
+Không có thay đổi nào ở tầng cơ chế (`resolveCompanyPermissions`,
+`requireCompanyContextForActor`, session, audit-in-transaction) — Phần 5
+chỉ thêm permission key mới (`customer.*`/`lead.*`/`appointment.*`/
+`sales.*`/`catalog.*`, xem `src/lib/permissions/registry.ts`) chảy qua
+đúng pipeline đã có. Điểm khác biệt DUY NHẤT đáng chú ý: visibility CRM là
+Company-wide theo permission (ADR-022), không tự-scope theo owner như
+WorkItem (ADR-015) — đây là quyết định ở TẦNG QUERY của domain service
+(`getCustomerList`/`getAppointmentList`/`getSaleList` không thêm
+`scopeFilter` theo `ownerUserId`), không phải thay đổi ở tầng
+`requireCompanyContextForActor`/resolver — 2 tầng này vẫn hoạt động y hệt
+Phần 3/4. `finance.`/`payroll.`/`healthcare.` vẫn còn trong
+`RESERVED_PERMISSION_PREFIXES`, chưa implement check (đúng phạm vi, dành
+cho Phần 6/7).
