@@ -100,9 +100,13 @@ trừ khỏi mọi UI agent song song để tránh xung đột).
 `finance.view/payment.create/payment.void/expense.create/expense.void/
 correction.create`, `payroll.view/manage`, `commission.view/manage`,
 `inventory.view/receive/issue/transfer/adjust/manage` (16 key mới,
-`src/lib/permissions/registry.ts`+`presets.ts`). Gỡ `"healthcare."` khỏi
-`RESERVED_PERMISSION_PREFIXES` — prefix reserved cuối cùng còn lại, dành
-Phần 7. **Phá vỡ pattern nhất quán từ Phần 3**: `payroll.view`/
+`src/lib/permissions/registry.ts`+`presets.ts`). Gỡ `"finance."`/`"payroll."`
+khỏi `RESERVED_PERMISSION_PREFIXES` (vì Phần 6 thêm permission thật cho 2
+prefix đó); **`"healthcare."` VẪN CÒN reserved** — prefix cuối cùng còn lại,
+dành Phần 7 gỡ khi thêm permission y tế thật. (Bản đầu của dòng này ghi
+nhầm là đã gỡ `"healthcare."` — tự phát hiện lúc bắt đầu Phần 7 bằng cách
+đối chiếu `registry.ts:105` với doc, đã sửa. Sự thật thi hành được là code,
+không phải doc.) **Phá vỡ pattern nhất quán từ Phần 3**: `payroll.view`/
 `commission.view` KHÔNG cấp mặc định cho VIEWER/MEMBER (quyết định tường
 minh theo anti-drift Q12 — rủi ro lộ lương đồng nghiệp). `READ_ONLY_PERMISSIONS`
 (`company-context.ts`) mở rộng đúng 4 permission `.view` mới. Mọi wrapper
