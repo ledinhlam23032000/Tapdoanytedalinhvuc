@@ -49,9 +49,14 @@ bcrypt, cookie `tdytdlv_session`. Permission registry + resolver ở
 
 ## File phải đọc theo thứ tự khi bắt đầu phiên
 
-`docs/project/SESSION_PROTOCOL.md` (thứ tự đầy đủ) →
-`PROJECT_STATE.json` → `docs/project/CURRENT_STATE.md` →
+`docs/project/NAVIGATION.md` (**đọc TRƯỚC TIÊN** — bản đồ "cần X → đi đâu",
+index ADR/model/permission, kỷ luật token) → `docs/project/SESSION_PROTOCOL.md`
+→ `PROJECT_STATE.json` → `docs/project/CURRENT_STATE.md` →
 `docs/checkpoints/LATEST.md`.
+
+Không grep/read mò khi `NAVIGATION.md` đã trả lời được — đó là khoản đốt
+token lớn nhất qua Phần 3-6. Chạy `npm run nav` cuối mỗi Phần để index không
+stale.
 
 ## Source of truth hierarchy
 

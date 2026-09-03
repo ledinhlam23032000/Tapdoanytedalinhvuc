@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "qa:tenant-isolation": "vitest run --config vitest.integration.config.ts src/lib/__tests__/tenant-isolation.itest.ts",
-    "bootstrap:founder": "tsx scripts/bootstrap-founder.ts"
+    "bootstrap:founder": "tsx scripts/bootstrap-founder.ts",
+    "nav": "tsx scripts/gen-nav-index.ts"
   },
   "dependencies": {
     "next": "16.3.3",
