@@ -1,5 +1,19 @@
 # Domain Model (Phần 2)
 
+## Cập nhật Phần 6 — Finance/Payroll/Commission/Inventory đã implement thật
+
+Mục "Generic Business Domains" bên dưới liệt kê `LedgerEntry`/`PayrollRun`
+conceptual từ Phần 2 — đã implement với delta cụ thể so với draft: `Payment`
+và `Expense` tách riêng thay vì 1 `Transaction` gộp (ADR-025); Receivable
+KHÔNG có bảng riêng, tính derived (ADR-026); `LedgerEntry` sửa bằng
+correction record (`correctionOfEntryId` self-FK), không update/delete
+(ADR-027); thêm `ApprovalRequest` — 1 primitive dùng chung cho 2-người-duyệt
+(Payroll Finalize + Inventory Adjustment, ADR-028/029), không có trong draft
+Phần 2; `CommissionCalculation` với `allocationBps` tường minh (ADR-030) mà
+draft không đặc tả chi tiết; `StockMovement` là nguồn sự thật duy nhất cho
+tồn kho, không có cột số dư mutable nào (ADR-031). Chi tiết:
+`docs/domain/FINANCE.md`, `PAYROLL.md`, `COMMISSION.md`, `INVENTORY.md`.
+
 ## Cập nhật Phần 5 — CRM/Lead/Appointment/Sales đã implement thật
 
 Mục "Generic Business Domains" bên dưới liệt kê `Customer`/`Appointment`/

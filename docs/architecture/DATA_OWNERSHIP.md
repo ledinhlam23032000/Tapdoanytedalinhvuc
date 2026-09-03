@@ -46,6 +46,29 @@ bảng gốc — ADR-017), `CustomerInteraction` (Company-owned qua Customer),
 Customer PII vẫn **Cao** như đã chốt — thực hiện bằng mã hoá tại rest
 (ADR-023), không phải chỉ ghi chú suông nữa.
 
+## Cập nhật Phần 6
+
+Dòng Finance/Payroll/Inventory ở bảng trên (`LedgerEntry`, `PayrollRun/Line`,
+Inventory) đã implement với delta so với draft Phần 2: `LedgerEntry` KHÔNG
+lấy attribution `CostCenter` (chưa tồn tại domain đó), giữ `OrganizationUnit`/
+`Project`/`Customer`; thêm `Payment` và `Expense` (Company-owned, không có
+trong bảng gốc — draft chỉ dự tính `PaymentRequest`, thực tế Phần 6 KHÔNG
+xây `PaymentRequest`/Decision Inbox pattern, dùng trực tiếp `Payment`/
+`Expense` + `ApprovalRequest` cho phần cần duyệt); `PayrollRun/Line` đổi
+tên field thật thành `PayrollRun`/`PayrollItem`, thêm `PayrollProfile`
+(lương hiệu lực theo thời gian, không có trong draft) và
+`CommissionRule`/`CommissionCalculation` (Company-owned, tách khỏi
+PayrollRun — draft gộp chung); **bug double-revenue-count đã ghi chú ở dòng
+Payroll gốc (`chờ fix double-revenue-count trước khi migrate công thức`) đã
+được giải quyết ở tầng thiết kế mới bằng `allocationBps` tường minh +
+validate tổng ≤10000 (ADR-030) — không migrate công thức cũ, viết lại từ
+đầu**; Inventory (dòng "chi tiết Phần 6") giờ có model đầy đủ:
+`InventoryLocation`, `InventoryItem`, `StockMovement` — sensitivity giữ
+Thấp–TB như dự tính, KHÔNG owned qua Location như draft gợi ý mà owned trực
+tiếp qua Company (Location chỉ là 1 field trên StockMovement, không phải
+parent ownership). Chi tiết: `docs/domain/FINANCE.md`, `PAYROLL.md`,
+`COMMISSION.md`, `INVENTORY.md`.
+
 ## Ghi chú UNKNOWN (không có ở core entity quan trọng — quality gate CXXX)
 
 Không có UNKNOWN ở core entity (Ecosystem/Company/Membership/Organization/

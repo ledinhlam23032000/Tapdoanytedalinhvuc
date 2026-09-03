@@ -68,6 +68,18 @@ toàn bằng CRUD thật).
 | Danh mục dịch vụ/sản phẩm (rải rác `ServiceMaterial`/`Material` — phần "bán được gì", tách khỏi phần tồn kho) | `CatalogItem` | NEW (phần bán) + KEEP_CONCEPT cho phần tồn kho (Phần 6 Inventory) | `CatalogItem` chỉ lấy phần "tên/giá/loại", KHÔNG lấy `StockMovement`/giá vốn — đó là Phần 6. |
 | Customer/Sale/Appointment status field (nhiều biến thể rải rác legacy) | `CustomerStatus`/`CustomerJourneyStage`/`AppointmentStatus`/`SaleStatus` | REWRITE, tối giản hoá | Không giữ nguyên số lượng trạng thái legacy — mỗi enum Phần 5 tối giản theo đúng mục VIII/XXXVI/XLVIII/LXV. |
 
+## Cập nhật Phần 6 — Legacy Capability Matrix rows
+
+| Legacy | Target entity | Salvage decision | Ghi chú |
+|---|---|---|---|
+| `CashTransaction`/`ZWorkspaceLedgerEntry` | `LedgerEntry` | KEEP CONCEPT + REWRITE OWNERSHIP | Bất biến append-only; sửa sai bằng correction record (`correctionOfEntryId`), không port cơ chế update trực tiếp nào của legacy (ADR-027). |
+| `PaymentRequest` (legacy, pattern preview→approve→execute→audit) | `ApprovalRequest` (Payroll Finalize + Inventory Adjustment) | ADAPT PATTERN, không REMAP data | Không xây `PaymentRequest`/Decision Inbox riêng cho Finance — Payment/Expense ghi trực tiếp, chỉ 2 hành động rủi ro cao nhất (Payroll Finalize, Inventory Adjustment) qua `ApprovalRequest`. |
+| `AssistantApproval` (2-người-duyệt thật, `web/src/app/(app)/tro-ly/agent.ts`) | `ApprovalRequest` | KEEP CONCEPT, REWRITE physical | Nguyên mẫu THẬT được dùng để thiết kế `ApprovalRequest` (verify bằng grep trực tiếp, có implementation chạy thật) — KHÔNG dùng `ZWorkspacePayrollRun` dual-field pattern (chưa xác minh chạy thật) làm mẫu (ADR-028). |
+| `PayrollEntry`/`ZWorkspacePayrollRun/Line` | `PayrollProfile`/`PayrollRun`/`PayrollItem` | MIGRATE_DATA + REWRITE formula | **Bug double-revenue-count đã ghi ở Phần 2 (`Data Ownership Matrix`) — KHÔNG migrate công thức cũ**, viết lại từ đầu với `allocationBps` tường minh + validate tổng ≤10000 (ADR-030), test hồi quy riêng cho đúng bug class này. |
+| Cơ chế hoa hồng rải rác legacy (không có model `CommissionRule` chuẩn hoá) | `CommissionRule`/`CommissionCalculation` | NEW | Không có bảng rule tương đương ở legacy — 3 loại rule đóng (`PERCENTAGE_OF_SALE`/`FIXED_PER_ITEM`/`TIERED_THRESHOLD`) thiết kế mới, không REMAP. |
+| `Material`/`StockMovement`/`ServiceMaterial` (legacy) | `InventoryItem`/`InventoryLocation`/`StockMovement` | KEEP CONCEPT (tên `StockMovement`) + REWRITE physical | Chỉ giữ triết lý "nguồn sự thật là movement, không phải cột số dư" — schema/type/idempotency viết mới hoàn toàn, không copy field. |
+| `ZMechanismDefinition`/`ZMechanismVersion` (rule engine chiết khấu/hoa hồng) | — (không port, đã DEFER từ Phần 5) | KHÔNG SALVAGE | Xác nhận lại ở Phần 6: DRAFT-only, chưa từng chạy production thật (ADR-021 Phần 5 vẫn đúng cho cả Commission Phần 6). |
+
 ## Legacy Role Map (bổ sung Phần 3 — mục CIII-CVII)
 
 Legacy `Role` enum (10 giá trị, global trên `User`) KHÔNG map 1:1 vào

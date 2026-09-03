@@ -162,6 +162,64 @@ const VIEWER_PART5: CompanyPermission[] = [
   "catalog.view",
 ];
 
+// Phần 6 bổ sung finance/payroll/commission/inventory permissions (HIGH/
+// VERY HIGH RISK — ADR-024..ADR-035). Khác nguyên tắc "VIEWER thấy mọi
+// .view key" đồng nhất của Phần 4/5: `payroll.view` KHÔNG cấp cho
+// MEMBER/VIEWER — trả lời trực tiếp anti-drift Q12 của Master Prompt
+// ("User bình thường có thấy payroll? NO unless permission") vì lương là
+// dữ liệu nhạy cảm hơn hẳn Customer/Sales. `finance.correction.create` và
+// `inventory.manage` (cấu trúc/surgical) chỉ OWNER/COMPANY_ADMIN — Void
+// Payment/Expense vẫn để MANAGER (thao tác vận hành hằng ngày, không cần
+// hai người duyệt theo ADR-029). Chỉ `payroll.manage`
+// (Finalize)/`inventory.adjust` mới bắt buộc qua ApprovalRequest 2 người —
+// permission ở đây chỉ quyết định AI được PHÉP khởi tạo hành động đó.
+const OWNER_ADMIN_PART6: CompanyPermission[] = [
+  "finance.view",
+  "finance.payment.create",
+  "finance.payment.void",
+  "finance.expense.create",
+  "finance.expense.void",
+  "finance.correction.create",
+  "payroll.view",
+  "payroll.manage",
+  "commission.view",
+  "commission.manage",
+  "inventory.view",
+  "inventory.receive",
+  "inventory.issue",
+  "inventory.transfer",
+  "inventory.adjust",
+  "inventory.manage",
+];
+
+const MANAGER_PART6: CompanyPermission[] = [
+  "finance.view",
+  "finance.payment.create",
+  "finance.payment.void",
+  "finance.expense.create",
+  "finance.expense.void",
+  "payroll.view",
+  "payroll.manage",
+  "commission.view",
+  "commission.manage",
+  "inventory.view",
+  "inventory.receive",
+  "inventory.issue",
+  "inventory.transfer",
+  "inventory.adjust",
+];
+
+const MEMBER_PART6: CompanyPermission[] = [
+  "finance.view",
+  "finance.payment.create",
+  "commission.view",
+  "inventory.view",
+  "inventory.receive",
+  "inventory.issue",
+];
+
+const VIEWER_PART6: CompanyPermission[] = ["finance.view", "inventory.view"];
+
 export const COMPANY_ROLE_PERMISSIONS: Record<CompanyRolePreset, CompanyPermission[]> = {
   OWNER: [
     "company.view",
@@ -170,6 +228,7 @@ export const COMPANY_ROLE_PERMISSIONS: Record<CompanyRolePreset, CompanyPermissi
     "company.members.manage",
     ...OWNER_ADMIN_PART4,
     ...OWNER_ADMIN_PART5,
+    ...OWNER_ADMIN_PART6,
   ],
   COMPANY_ADMIN: [
     "company.view",
@@ -178,8 +237,15 @@ export const COMPANY_ROLE_PERMISSIONS: Record<CompanyRolePreset, CompanyPermissi
     "company.members.manage",
     ...OWNER_ADMIN_PART4,
     ...OWNER_ADMIN_PART5,
+    ...OWNER_ADMIN_PART6,
   ],
-  MANAGER: ["company.view", "company.members.view", ...MANAGER_PART4, ...MANAGER_PART5],
-  MEMBER: ["company.view", ...MEMBER_PART4, ...MEMBER_PART5],
-  VIEWER: ["company.view", ...VIEWER_PART4, ...VIEWER_PART5],
+  MANAGER: [
+    "company.view",
+    "company.members.view",
+    ...MANAGER_PART4,
+    ...MANAGER_PART5,
+    ...MANAGER_PART6,
+  ],
+  MEMBER: ["company.view", ...MEMBER_PART4, ...MEMBER_PART5, ...MEMBER_PART6],
+  VIEWER: ["company.view", ...VIEWER_PART4, ...VIEWER_PART5, ...VIEWER_PART6],
 };

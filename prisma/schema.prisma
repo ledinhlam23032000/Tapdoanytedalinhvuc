@@ -52,6 +52,25 @@ model User {
   appointmentsAssigned  Appointment[]         @relation("AppointmentAssignee")
   appointmentsCreated   Appointment[]         @relation("AppointmentCreator")
   salesAsSalesperson    Sale[]                @relation("SaleSalesperson")
+
+  // Phần 6 — Finance + Payroll + Commission + Inventory
+  paymentsCreated               Payment[]               @relation("PaymentCreatedBy")
+  paymentsVoided                Payment[]               @relation("PaymentVoidedBy")
+  expensesCreated               Expense[]               @relation("ExpenseCreatedBy")
+  expensesVoided                Expense[]               @relation("ExpenseVoidedBy")
+  ledgerEntriesCreated          LedgerEntry[]           @relation("LedgerEntryCreatedBy")
+  ledgerEntriesVoided           LedgerEntry[]           @relation("LedgerEntryVoidedBy")
+  payrollProfiles               PayrollProfile[]        @relation("PayrollProfileUser")
+  payrollRunsCreated            PayrollRun[]            @relation("PayrollRunCreatedBy")
+  payrollRunsApproved           PayrollRun[]            @relation("PayrollRunApprovedBy")
+  payrollRunsFinalized          PayrollRun[]            @relation("PayrollRunFinalizedBy")
+  payrollRunsVoided             PayrollRun[]            @relation("PayrollRunVoidedBy")
+  payrollItems                  PayrollItem[]           @relation("PayrollItemUser")
+  approvalRequestsRequested     ApprovalRequest[]       @relation("ApprovalRequestedBy")
+  approvalRequestsFirstApproved ApprovalRequest[]       @relation("ApprovalFirstApprovedBy")
+  commissionRulesCreated        CommissionRule[]        @relation("CommissionRuleCreatedBy")
+  commissionCalculations        CommissionCalculation[] @relation("CommissionCalculationUser")
+  stockMovementsActed           StockMovement[]         @relation("StockMovementActor")
 }
 
 // ===== Ecosystem =====
@@ -151,6 +170,19 @@ model Company {
   appointments         Appointment[]
   catalogItems         CatalogItem[]
   sales                Sale[]
+
+  // Phần 6 — Finance + Payroll + Commission + Inventory
+  payments               Payment[]
+  expenses               Expense[]
+  ledgerEntries          LedgerEntry[]
+  payrollProfiles        PayrollProfile[]
+  payrollRuns            PayrollRun[]
+  approvalRequests       ApprovalRequest[]
+  commissionRules        CommissionRule[]
+  commissionCalculations CommissionCalculation[]
+  inventoryItems         InventoryItem[]
+  inventoryLocations     InventoryLocation[]
+  stockMovements         StockMovement[]
 
   @@unique([ecosystemId, code])
   @@index([ecosystemId])
@@ -254,6 +286,11 @@ model OrganizationUnit {
   customers    Customer[]
   appointments Appointment[]
   sales        Sale[]
+
+  // Phần 6 — Finance + Inventory attribution
+  expenses           Expense[]
+  inventoryLocations InventoryLocation[]
+  ledgerEntries      LedgerEntry[]
 
   @@index([companyId])
   @@index([parentId])
@@ -381,12 +418,14 @@ model Project {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  company     Company             @relation(fields: [companyId], references: [id])
-  owner       User?               @relation("ProjectOwner", fields: [ownerUserId], references: [id])
-  owningUnit  OrganizationUnit?   @relation("ProjectOwningUnit", fields: [owningUnitId], references: [id])
-  memberships ProjectMembership[]
-  workItems   WorkItem[]
-  sales       Sale[]
+  company       Company             @relation(fields: [companyId], references: [id])
+  owner         User?               @relation("ProjectOwner", fields: [ownerUserId], references: [id])
+  owningUnit    OrganizationUnit?   @relation("ProjectOwningUnit", fields: [owningUnitId], references: [id])
+  memberships   ProjectMembership[]
+  workItems     WorkItem[]
+  sales         Sale[]
+  expenses      Expense[]
+  ledgerEntries LedgerEntry[]
 
   @@unique([companyId, code])
   @@index([companyId, status])
@@ -523,6 +562,7 @@ model Customer {
   appointments      Appointment[]
   sales             Sale[]
   workItems         WorkItem[]
+  ledgerEntries     LedgerEntry[]
 
   @@unique([companyId, code])
   @@index([companyId, phoneHash])
@@ -611,8 +651,9 @@ model CatalogItem {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
-  company   Company    @relation(fields: [companyId], references: [id])
-  saleLines SaleLine[]
+  company        Company         @relation(fields: [companyId], references: [id])
+  saleLines      SaleLine[]
+  inventoryItems InventoryItem[]
 
   @@unique([companyId, code])
   @@index([companyId, active])
@@ -648,6 +689,10 @@ model Sale {
   salesperson      User?             @relation("SaleSalesperson", fields: [salespersonUserId], references: [id])
   lines            SaleLine[]
 
+  // Phần 6 — Finance + Commission
+  payments               Payment[]
+  commissionCalculations CommissionCalculation[]
+
   @@unique([companyId, code])
   @@index([companyId, createdAt])
   @@index([companyId, customerId])
@@ -672,4 +717,462 @@ model SaleLine {
   catalogItem CatalogItem? @relation(fields: [catalogItemId], references: [id])
 
   @@index([saleId])
+}
+
+// ===== Phần 6 — Finance + Payment + Receivable + Ledger + Payroll + Commission + Inventory =====
+// Xem docs/architecture/DECISIONS.md ADR-024..ADR-035 và
+// docs/domain/FINANCE.md / PAYROLL.md / COMMISSION.md / INVENTORY.md.
+//
+// Bất biến bổ sung (Phần 6 — domain HIGH RISK / VERY HIGH RISK, đọc kỹ
+// trước khi sửa bất kỳ model nào dưới đây):
+//   - LedgerEntry là nguồn sự thật tài chính duy nhất, luôn thuộc Company
+//     (KHÔNG BAO GIỜ Project). BẤT BIẾN, không sửa/xoá — chỉ Void hoặc tạo
+//     entry correction mới trỏ correctionOfEntryId về entry gốc (ADR-024).
+//   - Sale ≠ Payment ≠ Ledger. Payment chỉ là tiền VÀO gắn 1 Sale; Expense
+//     là tiền RA của Company (kể cả trả lương/hoa hồng qua Payroll) —
+//     KHÔNG dùng 1 bảng đại diện cả ba (ADR-025).
+//   - Receivable/công nợ KHÔNG có bảng riêng — luôn derive từ
+//     Sale.totalAmount trừ tổng Payment còn hiệu lực (ADR-026).
+//   - PayrollRun sau FINALIZED không mutate ngược — mọi field
+//     PayrollItem đã tính đều đóng băng qua calculationSnapshot; sửa sau
+//     Finalize = tạo PayrollRun điều chỉnh mới, không patch run cũ
+//     (ADR-027).
+//   - ApprovalRequest là primitive two-person-approval DÙNG CHUNG cho mọi
+//     hành động rủi ro cao — KHÔNG tạo bảng approval riêng theo domain
+//     (ADR-028). Chỉ PayrollRun.finalize và StockMovement ADJUSTMENT bắt
+//     buộc đi qua đây ở Phần 6 (ADR-029).
+//   - CommissionRule chỉ 3 loại đóng (percentage/fixed/tiered) — KHÔNG
+//     phải rule engine JSON tổng quát. CommissionCalculation ghi allocation
+//     tường minh theo từng người/vai trò trên 1 Sale để tránh double-count
+//     khi 1 người giữ nhiều vai trò (ADR-030 — fix bug thật đã xảy ra ở
+//     legacy, xem FINANCE-DEFINITIONS.md).
+//   - StockMovement là nguồn sự thật duy nhất của tồn kho — KHÔNG có cột
+//     "stock hiện tại" mutable trên InventoryItem. Số dư luôn derive qua
+//     SUM(quantity theo type) tại thời điểm đọc (ADR-031).
+//   - Mọi field tiền dùng Decimal(18,2), luôn KHÔNG ÂM — chiều thu/chi suy
+//     từ entity/type, không dùng số có dấu (ADR-032). Server Action KHÔNG
+//     BAO GIỜ trả thẳng object Prisma chứa Decimal cho Client Component.
+//   - Không có model AccountsPayable/Invoice kế toán/PurchaseOrder/
+//     Supplier/BankReconciliation/Tax/ShareholderDistribution/CostCenter ở
+//     Phần 6 (ADR-035) — đừng vô tình build lại khi mở rộng.
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  EWALLET
+  OTHER
+}
+
+enum PaymentStatus {
+  POSTED
+  VOID
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  companyId       String
+  saleId          String
+  amount          Decimal       @db.Decimal(18, 2)
+  method          PaymentMethod @default(CASH)
+  occurredAt      DateTime      @default(now())
+  reference       String?
+  idempotencyKey  String?
+  status          PaymentStatus @default(POSTED)
+  voidedAt        DateTime?
+  voidedByUserId  String?
+  voidReason      String?
+  createdByUserId String
+  createdAt       DateTime      @default(now())
+
+  company   Company @relation(fields: [companyId], references: [id])
+  sale      Sale    @relation(fields: [saleId], references: [id])
+  createdBy User    @relation("PaymentCreatedBy", fields: [createdByUserId], references: [id])
+  voidedBy  User?   @relation("PaymentVoidedBy", fields: [voidedByUserId], references: [id])
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, occurredAt])
+  @@index([companyId, saleId])
+}
+
+enum ExpenseCategory {
+  RENT
+  MARKETING
+  SALARY
+  SUPPLIES
+  UTILITIES
+  OTHER
+}
+
+enum ExpenseSourceType {
+  MANUAL
+  PAYROLL_RUN
+}
+
+enum ExpenseStatus {
+  POSTED
+  VOID
+}
+
+model Expense {
+  id                 String            @id @default(cuid())
+  companyId          String
+  category           ExpenseCategory
+  amount             Decimal           @db.Decimal(18, 2)
+  occurredAt         DateTime          @default(now())
+  description        String?
+  organizationUnitId String?
+  projectId          String?
+  sourceType         ExpenseSourceType @default(MANUAL)
+  sourceId           String?
+  status             ExpenseStatus     @default(POSTED)
+  voidedAt           DateTime?
+  voidedByUserId     String?
+  voidReason         String?
+  createdByUserId    String
+  createdAt          DateTime          @default(now())
+
+  company          Company           @relation(fields: [companyId], references: [id])
+  organizationUnit OrganizationUnit? @relation(fields: [organizationUnitId], references: [id])
+  project          Project?          @relation(fields: [projectId], references: [id])
+  createdBy        User              @relation("ExpenseCreatedBy", fields: [createdByUserId], references: [id])
+  voidedBy         User?             @relation("ExpenseVoidedBy", fields: [voidedByUserId], references: [id])
+
+  @@index([companyId, occurredAt])
+  @@index([companyId, category])
+  @@index([companyId, sourceType, sourceId])
+}
+
+enum LedgerEntryType {
+  SALE_RECEIPT
+  EXPENSE
+  SALARY_PAYMENT
+  REFUND
+  ADJUSTMENT
+  OTHER
+}
+
+enum LedgerSourceType {
+  SALE
+  PAYMENT
+  EXPENSE
+  PAYROLL_RUN
+  MANUAL
+}
+
+enum LedgerEntryStatus {
+  POSTED
+  VOID
+}
+
+model LedgerEntry {
+  id                  String            @id @default(cuid())
+  companyId           String
+  type                LedgerEntryType
+  amount              Decimal           @db.Decimal(18, 2)
+  occurredAt          DateTime          @default(now())
+  sourceType          LedgerSourceType
+  sourceId            String
+  status              LedgerEntryStatus @default(POSTED)
+  voidedAt            DateTime?
+  voidedByUserId      String?
+  voidReason          String?
+  correctionOfEntryId String?
+  organizationUnitId  String?
+  projectId           String?
+  customerId          String?
+  createdByUserId     String
+  createdAt           DateTime          @default(now())
+
+  company           Company           @relation(fields: [companyId], references: [id])
+  organizationUnit  OrganizationUnit? @relation(fields: [organizationUnitId], references: [id])
+  project           Project?          @relation(fields: [projectId], references: [id])
+  customer          Customer?         @relation(fields: [customerId], references: [id])
+  createdBy         User              @relation("LedgerEntryCreatedBy", fields: [createdByUserId], references: [id])
+  voidedBy          User?             @relation("LedgerEntryVoidedBy", fields: [voidedByUserId], references: [id])
+  correctionOfEntry LedgerEntry?      @relation("LedgerEntryCorrection", fields: [correctionOfEntryId], references: [id])
+  corrections       LedgerEntry[]     @relation("LedgerEntryCorrection")
+
+  @@index([companyId, occurredAt])
+  @@index([companyId, type])
+  @@index([companyId, sourceType, sourceId])
+}
+
+enum PayrollPayType {
+  MONTHLY
+}
+
+model PayrollProfile {
+  id            String         @id @default(cuid())
+  companyId     String
+  userId        String
+  baseSalary    Decimal        @db.Decimal(18, 2)
+  payType       PayrollPayType @default(MONTHLY)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+  user    User    @relation("PayrollProfileUser", fields: [userId], references: [id])
+
+  @@index([companyId, userId, effectiveFrom])
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  CALCULATED
+  APPROVED
+  FINALIZED
+  VOIDED
+}
+
+model PayrollRun {
+  id                String           @id @default(cuid())
+  companyId         String
+  periodStart       DateTime
+  periodEnd         DateTime
+  status            PayrollRunStatus @default(DRAFT)
+  approvedByUserId  String?
+  approvedAt        DateTime?
+  finalizedByUserId String?
+  finalizedAt       DateTime?
+  voidedByUserId    String?
+  voidedAt          DateTime?
+  voidReason        String?
+  createdByUserId   String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  company     Company       @relation(fields: [companyId], references: [id])
+  createdBy   User          @relation("PayrollRunCreatedBy", fields: [createdByUserId], references: [id])
+  approvedBy  User?         @relation("PayrollRunApprovedBy", fields: [approvedByUserId], references: [id])
+  finalizedBy User?         @relation("PayrollRunFinalizedBy", fields: [finalizedByUserId], references: [id])
+  voidedBy    User?         @relation("PayrollRunVoidedBy", fields: [voidedByUserId], references: [id])
+  items       PayrollItem[]
+
+  @@unique([companyId, periodStart, periodEnd])
+  @@index([companyId, periodStart, periodEnd])
+}
+
+model PayrollItem {
+  id                  String   @id @default(cuid())
+  payrollRunId        String
+  userId              String
+  baseAmount          Decimal  @default(0) @db.Decimal(18, 2)
+  commissionAmount    Decimal  @default(0) @db.Decimal(18, 2)
+  bonusAmount         Decimal  @default(0) @db.Decimal(18, 2)
+  deductionAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  netAmount           Decimal  @default(0) @db.Decimal(18, 2)
+  calculationSnapshot Json
+  createdAt           DateTime @default(now())
+
+  payrollRun             PayrollRun              @relation(fields: [payrollRunId], references: [id])
+  user                   User                    @relation("PayrollItemUser", fields: [userId], references: [id])
+  commissionCalculations CommissionCalculation[]
+
+  @@unique([payrollRunId, userId])
+  @@index([userId])
+}
+
+enum ApprovalActionType {
+  PAYROLL_FINALIZE
+  INVENTORY_ADJUSTMENT
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  PENDING_SECOND
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+// Mô phỏng theo AssistantApproval (legacy, đã production-tested — xem
+// ADR-028): status-driven, MỘT field firstApprovedByUserId (không phải 2
+// field approver riêng). Bất biến: actor chuyển PENDING_SECOND->APPROVED
+// PHẢI khác firstApprovedByUserId (assert ở domain service, không phải DB
+// constraint — Postgres không check "2 cột khác nhau" xuyên request).
+model ApprovalRequest {
+  id                    String                @id @default(cuid())
+  companyId             String
+  actionType            ApprovalActionType
+  targetType            String
+  targetId              String
+  // Tham số để THỰC THI hành động gốc sau khi APPROVED — bắt buộc cho hành
+  // động chưa có record tồn tại sẵn để gate transition lên (vd Inventory
+  // Adjustment: chưa có StockMovement nào cho tới khi duyệt xong, khác
+  // PayrollRun.finalize vốn đã có PayrollRun tồn tại làm targetId). Domain
+  // service tự định nghĩa shape Json theo actionType, không dùng chung 1
+  // shape (không phải generic object graph — mỗi actionType tự biết cách
+  // đọc payload của mình).
+  payload               Json?
+  requestedByUserId     String
+  reason                String
+  status                ApprovalRequestStatus @default(PENDING)
+  firstApprovedByUserId String?
+  firstApprovedAt       DateTime?
+  resolvedAt            DateTime?
+  createdAt             DateTime              @default(now())
+
+  company             Company @relation(fields: [companyId], references: [id])
+  requestedBy         User    @relation("ApprovalRequestedBy", fields: [requestedByUserId], references: [id])
+  firstApprovedByUser User?   @relation("ApprovalFirstApprovedBy", fields: [firstApprovedByUserId], references: [id])
+
+  @@index([companyId, status])
+  @@index([companyId, actionType, targetId])
+}
+
+enum CommissionRuleType {
+  PERCENTAGE_OF_SALE
+  FIXED_PER_ITEM
+  TIERED_THRESHOLD
+}
+
+enum CommissionRuleStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+model CommissionRule {
+  id              String               @id @default(cuid())
+  companyId       String
+  name            String
+  type            CommissionRuleType
+  config          Json
+  status          CommissionRuleStatus @default(DRAFT)
+  effectiveFrom   DateTime             @default(now())
+  effectiveTo     DateTime?
+  createdByUserId String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  company      Company                 @relation(fields: [companyId], references: [id])
+  createdBy    User                    @relation("CommissionRuleCreatedBy", fields: [createdByUserId], references: [id])
+  calculations CommissionCalculation[]
+
+  @@index([companyId, status])
+}
+
+// Mỗi dòng = 1 người + 1 vai trò đóng góp trên 1 Sale. allocationBps của
+// mọi dòng cùng saleId KHÔNG được cộng vượt quá tổng dự kiến — đây chính
+// là cơ chế chặn bug double-revenue-count đã xảy ra thật ở legacy khi 1
+// người giữ 2 vai trò trên cùng 1 case (xem ADR-030, FINANCE-DEFINITIONS.md).
+model CommissionCalculation {
+  id            String   @id @default(cuid())
+  companyId     String
+  saleId        String
+  payrollItemId String?
+  userId        String
+  role          String
+  ruleId        String?
+  allocationBps Int
+  amount        Decimal  @db.Decimal(18, 2)
+  snapshot      Json
+  createdAt     DateTime @default(now())
+
+  company     Company         @relation(fields: [companyId], references: [id])
+  sale        Sale            @relation(fields: [saleId], references: [id])
+  payrollItem PayrollItem?    @relation(fields: [payrollItemId], references: [id])
+  user        User            @relation("CommissionCalculationUser", fields: [userId], references: [id])
+  rule        CommissionRule? @relation(fields: [ruleId], references: [id])
+
+  @@index([companyId, saleId])
+  @@index([companyId, userId])
+  @@index([payrollItemId])
+}
+
+enum InventoryLocationType {
+  WAREHOUSE
+  BRANCH
+  STORAGE
+}
+
+model InventoryLocation {
+  id                 String                @id @default(cuid())
+  companyId          String
+  name               String
+  type               InventoryLocationType @default(WAREHOUSE)
+  organizationUnitId String?
+  status             ArchivableStatus      @default(ACTIVE)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  company          Company           @relation(fields: [companyId], references: [id])
+  organizationUnit OrganizationUnit? @relation(fields: [organizationUnitId], references: [id])
+  movements        StockMovement[]
+
+  @@index([companyId, status])
+}
+
+model InventoryItem {
+  id            String           @id @default(cuid())
+  companyId     String
+  catalogItemId String?
+  sku           String?
+  name          String
+  unit          String
+  trackStock    Boolean          @default(true)
+  // Ngưỡng cảnh báo tồn thấp per-item (mục CXLII/CCXVI) — số dư <=
+  // reorderLevel là Low Stock signal. Null = không theo dõi ngưỡng cho item
+  // này (không ép mọi item phải khai báo).
+  reorderLevel  Decimal?         @db.Decimal(18, 3)
+  status        ArchivableStatus @default(ACTIVE)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  company     Company         @relation(fields: [companyId], references: [id])
+  catalogItem CatalogItem?    @relation(fields: [catalogItemId], references: [id])
+  movements   StockMovement[]
+
+  @@unique([companyId, sku])
+  @@index([companyId, status])
+}
+
+// ADJUSTMENT tách 2 chiều riêng (không phải 1 giá trị chung) — quantity
+// luôn dương (ADR-032), điều chỉnh giảm tồn kho vẫn cần 1 type riêng để
+// suy chiều đúng, cùng nguyên tắc với TRANSFER_IN/TRANSFER_OUT.
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
+enum StockMovementSourceType {
+  SALE
+  MANUAL
+  ADJUSTMENT
+  TRANSFER
+}
+
+// quantity LUÔN dương — chiều nhập/xuất suy từ `type`, không dùng số có
+// dấu (ADR-032). Số dư tồn kho KHÔNG có cột lưu trữ — luôn derive qua
+// SUM(quantity) nhóm theo type tại thời điểm đọc (ADR-031).
+model StockMovement {
+  id              String                  @id @default(cuid())
+  companyId       String
+  inventoryItemId String
+  locationId      String
+  type            StockMovementType
+  quantity        Decimal                 @db.Decimal(18, 3)
+  occurredAt      DateTime                @default(now())
+  sourceType      StockMovementSourceType @default(MANUAL)
+  sourceId        String?
+  reason          String?
+  idempotencyKey  String?
+  actorUserId     String
+  createdAt       DateTime                @default(now())
+
+  company       Company           @relation(fields: [companyId], references: [id])
+  inventoryItem InventoryItem     @relation(fields: [inventoryItemId], references: [id])
+  location      InventoryLocation @relation(fields: [locationId], references: [id])
+  actor         User              @relation("StockMovementActor", fields: [actorUserId], references: [id])
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, inventoryItemId, locationId, occurredAt])
+  @@index([companyId, sourceType, sourceId])
 }

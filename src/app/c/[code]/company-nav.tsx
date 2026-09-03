@@ -12,6 +12,9 @@ export function CompanyNav({
   canViewCustomers,
   canViewAppointments,
   canViewSales,
+  canViewFinance,
+  canViewPayroll,
+  canViewInventory,
 }: {
   code: string;
   canManageMembers: boolean;
@@ -21,17 +24,24 @@ export function CompanyNav({
   canViewCustomers: boolean;
   canViewAppointments: boolean;
   canViewSales: boolean;
+  canViewFinance: boolean;
+  canViewPayroll: boolean;
+  canViewInventory: boolean;
 }) {
   const pathname = usePathname();
   // mục CXCVII: giữ "navigation budget" — Lead gộp vào trang Khách hàng
   // (tab), Catalog gộp vào trang Kinh doanh, không thêm mục nav riêng cho
-  // từng entity Phần 5.
+  // từng entity Phần 5. Phần 6: Commission gộp vào trang Lương (tab/link),
+  // không thêm mục nav riêng — cùng nguyên tắc.
   const items = [
     { href: `/c/${code}`, label: "Tổng quan" },
     ...(canViewWork ? [{ href: `/c/${code}/today`, label: "Hôm nay" }] : []),
     ...(canViewCustomers ? [{ href: `/c/${code}/customers`, label: "Khách hàng" }] : []),
     ...(canViewAppointments ? [{ href: `/c/${code}/appointments`, label: "Lịch hẹn" }] : []),
     ...(canViewSales ? [{ href: `/c/${code}/sales`, label: "Kinh doanh" }] : []),
+    ...(canViewFinance ? [{ href: `/c/${code}/finance`, label: "Tài chính" }] : []),
+    ...(canViewPayroll ? [{ href: `/c/${code}/payroll`, label: "Lương" }] : []),
+    ...(canViewInventory ? [{ href: `/c/${code}/inventory`, label: "Tồn kho" }] : []),
     ...(canViewWork ? [{ href: `/c/${code}/work`, label: "Công việc" }] : []),
     ...(canViewProjects ? [{ href: `/c/${code}/projects`, label: "Dự án" }] : []),
     ...(canViewOrganization ? [{ href: `/c/${code}/organization`, label: "Cơ cấu tổ chức" }] : []),

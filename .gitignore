@@ -43,3 +43,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# derived pandoc dumps cua Master Prompt DOCX (DOCX goc moi la source of
+# truth — xem CLAUDE.md "Source of truth hierarchy"). Tao lai bang:
+#   pandoc -t markdown "MASTER PROMPT — TAPDOANYTEDALINHVUC.docx" -o master_prompt.md
+/master_prompt.md
+/docs/legacy/part*_master_prompt_section.md

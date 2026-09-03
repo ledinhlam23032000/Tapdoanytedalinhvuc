@@ -143,3 +143,29 @@ WorkItem (ADR-015) — đây là quyết định ở TẦNG QUERY của domain s
 Phần 3/4. `finance.`/`payroll.`/`healthcare.` vẫn còn trong
 `RESERVED_PERMISSION_PREFIXES`, chưa implement check (đúng phạm vi, dành
 cho Phần 6/7).
+
+## Cập nhật Phần 6 — Finance/Payroll/Commission/Inventory dùng nguyên cơ chế Phần 3
+
+Không có thay đổi nào ở tầng cơ chế — Phần 6 chỉ thêm 16 permission key mới
+(`finance.*`/`payment.*`/`expense.*`/`correction.*`, `payroll.*`,
+`commission.*`, `inventory.*`, xem `src/lib/permissions/registry.ts`) chảy
+qua đúng pipeline `resolveCompanyPermissions`/`requireCompanyContextForActor`
+đã có từ Phần 3. Gỡ `"finance."`/`"payroll."` khỏi
+`RESERVED_PERMISSION_PREFIXES` (chỉ còn `"healthcare."`, dành Phần 7).
+
+Điểm khác biệt đáng chú ý DUY NHẤT so với Phần 3-5: `payroll.view`/
+`commission.view` **KHÔNG** cấp mặc định cho VIEWER (phá vỡ pattern
+"VIEWER thấy mọi `.view`" nhất quán từ Phần 3 — quyết định tường minh, rủi
+ro lộ lương đồng nghiệp). `READ_ONLY_PERMISSIONS` (`company-context.ts`) mở
+rộng đúng 4 permission `.view` mới, không lặp lại lỗ hổng Suspended-Company
+của Phần 4 (mọi mutation Phần 6 đều nằm ngoài `READ_ONLY_PERMISSIONS`).
+
+Bổ sung mới ngoài phạm vi Phần 3: mọi wrapper approval (`firstApprovePayrollFinalize`/
+`secondApprovePayrollFinalize`/`rejectPayrollFinalize`/
+`firstApproveStockAdjustment`/`secondApproveStockAdjustment`/
+`rejectStockAdjustment`) hardcode permission string (`"payroll.manage"`/
+`"inventory.adjust"`) NGAY TRONG HÀM — không nhận `permission` như tham số
+truyền vào rồi chuyển tiếp cho `requireCompanyContextForActor`. Đây là ranh
+giới mới cần giữ nguyên cho MỌI approval domain tương lai (Phần 7+): tham
+số permission client-controlled đi tới hàm authorization là lỗ hổng leo
+thang quyền, bất kể domain nào.

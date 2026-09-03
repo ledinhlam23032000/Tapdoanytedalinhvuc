@@ -13,7 +13,7 @@ khi bắt đầu Phần đó (token economy).
 | 3 | Ecosystem + Company + Identity + Membership + Permissions | HOÀN TẤT |
 | 4 | Organization + Work Core + Project | HOÀN TẤT |
 | 5 | CRM + Sales + Generic Operations | HOÀN TẤT |
-| 6 | Finance + Payroll + Commission + Inventory | Chưa bắt đầu |
+| 6 | Finance + Payroll + Commission + Inventory | HOÀN TẤT |
 | 7 | Healthcare Vertical + Legacy Clinic Parity | Chưa bắt đầu |
 | 8 | AI Runtime + Digital COO + Ecosystem AI + Company AI + Decision Inbox + Safe Execution | Chưa bắt đầu |
 | 9 | Founder/Manager/Employee UX + Mission Control + Company Home + Today + Full Integration | Chưa bắt đầu |

@@ -75,3 +75,61 @@ export async function assertSameCompanySale(companyId: string, saleId: string) {
   }
   return sale;
 }
+
+// Phần 6 — Finance + Payroll + Commission + Inventory
+
+export async function assertSameCompanyPayment(companyId: string, paymentId: string) {
+  const payment = await db.payment.findUnique({ where: { id: paymentId } });
+  if (!payment || payment.companyId !== companyId) {
+    throw new AuthorizationError("Khoản thanh toán không hợp lệ trong công ty này.");
+  }
+  return payment;
+}
+
+export async function assertSameCompanyExpense(companyId: string, expenseId: string) {
+  const expense = await db.expense.findUnique({ where: { id: expenseId } });
+  if (!expense || expense.companyId !== companyId) {
+    throw new AuthorizationError("Khoản chi không hợp lệ trong công ty này.");
+  }
+  return expense;
+}
+
+export async function assertSameCompanyLedgerEntry(companyId: string, entryId: string) {
+  const entry = await db.ledgerEntry.findUnique({ where: { id: entryId } });
+  if (!entry || entry.companyId !== companyId) {
+    throw new AuthorizationError("Bút toán sổ cái không hợp lệ trong công ty này.");
+  }
+  return entry;
+}
+
+export async function assertSameCompanyPayrollRun(companyId: string, payrollRunId: string) {
+  const run = await db.payrollRun.findUnique({ where: { id: payrollRunId } });
+  if (!run || run.companyId !== companyId) {
+    throw new AuthorizationError("Kỳ lương không hợp lệ trong công ty này.");
+  }
+  return run;
+}
+
+export async function assertSameCompanyCommissionRule(companyId: string, ruleId: string) {
+  const rule = await db.commissionRule.findUnique({ where: { id: ruleId } });
+  if (!rule || rule.companyId !== companyId) {
+    throw new AuthorizationError("Quy tắc hoa hồng không hợp lệ trong công ty này.");
+  }
+  return rule;
+}
+
+export async function assertSameCompanyInventoryItem(companyId: string, inventoryItemId: string) {
+  const item = await db.inventoryItem.findUnique({ where: { id: inventoryItemId } });
+  if (!item || item.companyId !== companyId) {
+    throw new AuthorizationError("Mặt hàng tồn kho không hợp lệ trong công ty này.");
+  }
+  return item;
+}
+
+export async function assertSameCompanyInventoryLocation(companyId: string, locationId: string) {
+  const location = await db.inventoryLocation.findUnique({ where: { id: locationId } });
+  if (!location || location.companyId !== companyId) {
+    throw new AuthorizationError("Kho/địa điểm không hợp lệ trong công ty này.");
+  }
+  return location;
+}

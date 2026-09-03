@@ -62,6 +62,27 @@ export const COMPANY_PERMISSIONS = [
   "sales.cancel",
   "catalog.view",
   "catalog.manage",
+  // Phần 6 — Finance + Payroll + Commission + Inventory (HIGH/VERY HIGH
+  // RISK — xem ADR-024..ADR-035). Vẫn giữ nguyên tắc "keep minimal": không
+  // tách permission riêng cho từng bước Tính/Kiểm tra/Chốt payroll — rủi ro
+  // cao hơn (Finalize) được gate thêm bằng ApprovalRequest 2 người
+  // (ADR-029), không phải bằng permission key riêng.
+  "finance.view",
+  "finance.payment.create",
+  "finance.payment.void",
+  "finance.expense.create",
+  "finance.expense.void",
+  "finance.correction.create",
+  "payroll.view",
+  "payroll.manage",
+  "commission.view",
+  "commission.manage",
+  "inventory.view",
+  "inventory.receive",
+  "inventory.issue",
+  "inventory.transfer",
+  "inventory.adjust",
+  "inventory.manage",
 ] as const;
 
 export type EcosystemPermission = (typeof ECOSYSTEM_PERMISSIONS)[number];
@@ -76,8 +97,9 @@ export function canGrantOwnerRole(actorRolePreset: string | undefined): boolean 
   return actorRolePreset === "OWNER";
 }
 
-// Reserved namespace cho domain tương lai (Part 6+) — CHỈ khai báo tên, KHÔNG
-// implement check nào cho tới khi domain đó thực sự tồn tại (mục CCXXVI).
-// "work." (Phần 4) và "customer."/"lead."/"appointment."/"sales."/"catalog."
-// (Phần 5) đã chuyển sang COMPANY_PERMISSIONS thật — bỏ khỏi reserved.
-export const RESERVED_PERMISSION_PREFIXES = ["finance.", "payroll.", "healthcare."] as const;
+// Reserved namespace cho domain tương lai (Part 7+) — CHỈ khai báo tên,
+// KHÔNG implement check nào cho tới khi domain đó thực sự tồn tại (mục
+// CCXXVI). "work." (Phần 4), "customer."/"lead."/"appointment."/"sales."/
+// "catalog." (Phần 5), "finance."/"payroll."/"commission."/"inventory."
+// (Phần 6) đã chuyển sang COMPANY_PERMISSIONS thật — bỏ khỏi reserved.
+export const RESERVED_PERMISSION_PREFIXES = ["healthcare."] as const;

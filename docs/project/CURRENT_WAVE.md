@@ -1,58 +1,65 @@
 # Current Wave
 
-**Phần 5 — CRM + Sales + Appointment + Customer Operations: HOÀN TẤT.**
-Implementation thật: Prisma schema (`CustomerSource`/`Lead`/`Customer`/
-`CustomerInteraction`/`Appointment`/`CatalogItem`/`Sale`/`SaleLine`, +
-`WorkItem` mở rộng), 4 domain service mới + Server Action wrapper, UI
-(`Khách hàng`/`Lead`/`Lịch hẹn`/`Kinh doanh`/`Danh mục`), 99 integration
-test PASS, adversarial code review 3 agent PASS (2 P1 tìm thấy và đã vá:
-tính tiền sai + PII over-fetch), 1 bug Decimal/Server-Action phát hiện qua
-browser test và đã vá, 3 browser journey thật (Reception/Sales, Sales
-transaction, Follow-up No-show) — xem `docs/checkpoints/LATEST.md`.
+**Phần 6 — Finance + Payroll + Commission + Inventory: HOÀN TẤT.**
+Implementation thật: Prisma schema 12 model mới (`Payment`/`Expense`/
+`LedgerEntry`/`PayrollProfile`/`PayrollRun`/`PayrollItem`/`ApprovalRequest`/
+`CommissionRule`/`CommissionCalculation`/`InventoryLocation`/
+`InventoryItem`/`StockMovement`, 4 migration), 3 module tính thuần +
+`approval-service.ts` + 4 domain service, Server Action wrapper, UI
+(`Tài chính`/`Lương`/`Tồn kho` + profiles/commission-rules/adjustments),
+133 integration test PASS, adversarial code review **5 agent** (4 P0 thật
+tìm thấy và đã vá — đều cùng root cause class: thiếu `SELECT...FOR UPDATE`
+cho check-then-write trên tiền/kho), 2 lớp bug thật phát hiện ngoài review
+(browser-test + re-verify test trước checkpoint), 3 browser journey thật
+(Finance/Payment, Payroll two-person-approval, Inventory two-person-approval)
+— xem `docs/checkpoints/LATEST.md`.
 
-**Tiếp theo: Phần 6 — Finance + Payroll + Commission + Inventory.**
+**Tiếp theo: Phần 7 — Healthcare Vertical + Legacy Clinic Parity.**
 
-Trước khi bắt đầu Phần 6, đọc đúng đoạn tương ứng trong
+Trước khi bắt đầu Phần 7, đọc đúng đoạn tương ứng trong
 `MASTER PROMPT — TAPDOANYTEDALINHVUC.docx` (dùng
 `pandoc -t markdown "MASTER PROMPT — TAPDOANYTEDALINHVUC.docx" -o master_prompt.md`
-rồi `grep -n "PART 6\|PHẦN 7"` để định vị range — không đọc lại toàn bộ file
-docx, chỉ đoạn Phần 6).
+rồi `grep -n "PART 7\|PHẦN 8"` để định vị range — không đọc lại toàn bộ file
+docx, chỉ đoạn Phần 7).
 
-## Input đã sẵn sàng cho Phần 6
+## Input đã sẵn sàng cho Phần 7
 
-- `Sale` (Phần 5, trạng thái CONFIRMED) là điểm neo tự nhiên cho
-  Invoice/Payment/Debt — DB dev hiện có sẵn ít nhất 1 Sale CONFIRMED thật
-  (Trần Thị Mai, 500.000đ) để test ngay không cần seed lại.
-- **Bài học Decimal quan trọng nhất từ Phần 5** — Prisma `Decimal` KHÔNG
-  serialize được qua Server Action → Client Component boundary (React RSC
-  chỉ nhận plain object). Phần 6 (Finance/Payroll) có RẤT NHIỀU field tiền
-  — mọi Server Action mới phải tự kiểm tra ngay từ đầu, không đợi tới
-  browser-test mới phát hiện như Phần 5 đã bị.
-- `src/lib/domain/sale-totals.ts` — pattern "module tính tiền thuần,
-  DB-free, unit-test riêng, service gọi thẳng hàm đã test thay vì viết lại
-  công thức tay" đã chứng minh đúng (P1 tiền Phần 5 chính là do vi phạm
-  pattern này) — Phần 6 (Payroll/Commission tính lương/hoa hồng) nên theo
-  đúng pattern.
-- `src/lib/domain/scope-guards.ts` — tiếp tục dùng cho
-  Invoice/Payment/Debt/Payroll/Commission/Inventory thay vì viết lại logic
-  assert cross-company riêng.
-- ADR-022 (Company-wide visibility theo permission `.view`, không self-scope
-  theo owner) — cân nhắc áp dụng tương tự cho Finance/Payroll trừ khi có lý
-  do nghiệp vụ thật để self-scope (vd: Payroll cá nhân nên tự nhiên
-  self-scope theo employee, cần ADR riêng chốt rõ trước khi code).
-- `docs/architecture/LEGACY_TO_TARGET_MAP.md` dòng Invoice/Payment/Debt/
-  Payroll/Commission/Inventory tương ứng — đã có Decision từ Phần 2, Phần 6
-  chỉ build theo đúng Decision đã chốt, không quyết định lại trừ khi
-  evidence mới buộc phải revisit.
-- `src/lib/permissions/registry.ts` — `RESERVED_PERMISSION_PREFIXES` còn
-  `finance.`/`payroll.` — bỏ khỏi reserved khi Phần 6 thêm permission thật.
+- `Appointment` (Phần 5) là điểm neo tự nhiên cho MedicalCase/Consultation —
+  DB dev hiện có sẵn Appointment thật (Trần Thị Mai) để test ngay không cần
+  seed lại.
+- `Customer` + mã hoá SĐT AES-256-GCM (ADR-023, Phần 5) — dữ liệu y tế nhạy
+  cảm HƠN PII SĐT, cần quyết định tường minh (ADR mới) về mã hoá/at-rest cho
+  `ClinicalPhoto`/`MedicalCase` TRƯỚC khi code, không mặc định "giống
+  Customer là đủ".
+- `ApprovalRequest` (Phần 6, ADR-028) — primitive 2-người-duyệt DÙNG CHUNG
+  đã chứng minh chạy đúng trên 2 domain độc lập (Payroll + Inventory,
+  live-verify qua browser cả hai). Phần 7 nếu cần duyệt 2 người (vd xoá hồ
+  sơ y tế, sửa chẩn đoán đã chốt) thì DÙNG LẠI, không tạo model duyệt thứ 2.
+- `RESERVED_PERMISSION_PREFIXES` giờ CHỈ còn `"healthcare."` — bỏ khỏi
+  reserved khi Phần 7 thêm permission thật (cùng pattern đã làm với
+  `customer.` ở Phần 5, `finance.`/`payroll.` ở Phần 6).
+- `InventoryItem`/`StockMovement` (Phần 6) — vật tư y tế tiêu hao trong 1 ca
+  điều trị nên trừ kho qua đúng `issueStock()` đã có, KHÔNG tạo engine kho
+  thứ 2 cho Healthcare (cùng tinh thần ADR-014 với WorkItem).
+- `Sale`/`CommissionCalculation` (Phần 5/6) — dịch vụ y tế đã bán + hoa hồng
+  bác sĩ/tư vấn viên đi qua đúng đường Sale→Commission đã có, không tạo
+  đường tiền riêng cho Healthcare.
+- **Bài học concurrency quan trọng nhất từ Phần 6** — mọi hàm domain có
+  pattern "đọc số dư/kiểm tra hợp lệ → ghi" PHẢI khoá dòng bằng
+  `SELECT...FOR UPDATE` trong `db.$transaction` (Postgres READ COMMITTED
+  không tự chặn). Phần 7 có slot lịch khám/giường/phòng — cùng class rủi ro,
+  áp dụng ngay từ đầu, không đợi review tìm ra như Phần 6.
+- **Bài học ngày/timezone từ Phần 6** — mọi so sánh/truncate ngày hiệu lực
+  dùng `getUTC*`/`Date.UTC`, không dùng giờ địa phương.
 
-## Việc CHƯA làm ở Phần 5 (đúng phạm vi, không phải thiếu sót)
+## Việc CHƯA làm ở Phần 6 (đúng phạm vi, không phải thiếu sót)
 
-Finance/Payroll/Commission/Inventory/Healthcare — mới có ở
-`DATA_OWNERSHIP.md`/`DOMAIN_MODEL.md` conceptual, CHƯA có trong
-`prisma/schema.prisma`. Sales Opportunity/Pipeline, Customer Merge, rule
-engine chiết khấu — cố tình không tạo (ADR-019/020/021, chưa có bằng chứng
-nghiệp vụ thật cần). `updateDraftSale` chưa có UI caller — domain function
-có sẵn, chờ nhu cầu thật (vd sửa Sale nháp nhiều dòng cùng lúc thay vì tạo
-lại).
+Healthcare (MedicalCase/Consultation/Procedure/Consent/ClinicalPhoto/
+MedicalFollowUp) — mới có ở `DATA_OWNERSHIP.md`/`DOMAIN_MODEL.md`
+conceptual, CHƯA có trong `prisma/schema.prisma`. Invoice/hoá đơn điện tử,
+AccountsPayable, đa tiền tệ, kế toán kép, định giá tồn kho FIFO/LIFO,
+barcode/serial/lot, Purchase Order/Supplier — cố tình không tạo
+(ADR-033/035 + `docs/domain/INVENTORY.md`, chưa có bằng chứng nghiệp vụ thật
+cần). DB-level trigger chống UPDATE/DELETE trên `LedgerEntry`/
+`StockMovement`/`AuditEvent` — bất biến hiện chỉ ở tầng application, ghi
+nhận là rủi ro mở (xem `LATEST.md` mục SECURITY RISKS).

@@ -123,6 +123,27 @@ mới ngoài dự kiến Phần 2: `lead.*`, `appointment.*`, `sales.*`, `catalo
 hoá AES-256-GCM tại rest (ADR-023) — `src/lib/crypto/phone.ts`, khoá
 `PHONE_ENC_KEY` không commit, không dùng chung giá trị với ZenithTasks.
 
+## Cập nhật Phần 6 — Finance/Payroll/Commission/Inventory permission thật
+
+Thêm 16 permission key mới: `finance.view`/`payment.create`/`payment.void`/
+`expense.create`/`expense.void`/`correction.create`, `payroll.view`/
+`payroll.manage`, `commission.view`/`commission.manage`, `inventory.view`/
+`receive`/`issue`/`transfer`/`adjust`/`manage`. Gỡ `"healthcare."` khỏi
+`RESERVED_PERMISSION_PREFIXES` — đây là prefix cuối cùng còn lại (dành cho
+Phần 7). Khác biệt đáng chú ý so với pattern VIEWER-mặc-định của Phần 4/5:
+`payroll.view`/`commission.view` **KHÔNG** cấp mặc định cho VIEWER/MEMBER
+(quyết định tường minh theo anti-drift Q12 "User bình thường có thấy
+payroll? NO unless permission") — đây là domain đầu tiên phá vỡ "VIEWER
+thấy mọi thứ `.view`" đã áp dụng nhất quán từ Phần 3, cố tình vì rủi ro lộ
+lương đồng nghiệp cao hơn hẳn CRM/Sales. Ranh giới quan trọng thứ 2: mọi
+wrapper approval (`firstApprovePayrollFinalize`, `firstApproveStockAdjustment`,
+...) hardcode permission string ngay trong hàm, KHÔNG BAO GIỜ nhận
+`permission` như tham số truyền từ ngoài vào rồi chuyển tiếp cho
+`requireCompanyContextForActor` — lỗ hổng leo thang quyền tự phát hiện và
+sửa trước khi review, không phải do review tìm ra. Chi tiết:
+`docs/domain/PAYROLL.md`, `INVENTORY.md`, ADR-028/029
+(`docs/architecture/DECISIONS.md`).
+
 ## Red-team review
 
 Xem `docs/architecture/RED_TEAM_REVIEW.md` — kết quả review đối kháng thiết

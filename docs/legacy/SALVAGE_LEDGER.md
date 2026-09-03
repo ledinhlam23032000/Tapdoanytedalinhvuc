@@ -50,6 +50,19 @@ cho `work-priority.ts`) tiếp tục mở rộng ở Phần 5: `getMyAppointment
 + No-show → follow-up Work nối vào đúng `createWorkItem()` đã có, không tạo
 nguồn tín hiệu Today riêng cho CRM.
 
+## Cập nhật Phần 6
+
+Pattern "2-người-duyệt" (`AssistantApproval`, `web/src/app/(app)/tro-ly/agent.ts`
+— verify bằng grep trực tiếp, có implementation chạy thật) **đã áp dụng
+thật** ở Phần 6: `src/lib/domain/approval-service.ts` (`ApprovalRequest`,
+viết mới hoàn toàn, không copy code). CỐ TÌNH KHÔNG dùng
+`ZWorkspacePayrollRun` dual-field pattern làm mẫu — chưa xác minh chạy thật
+qua archaeology, chỉ có 1 field `firstApprovedByUserId` tường minh thay vì
+2 field dual (ADR-028). Bug double-revenue-count đã ghi trong
+`FINANCE-DEFINITIONS.md` (con số cụ thể, không suy đoán) — KHÔNG salvage
+công thức cũ, thiết kế lại từ đầu với `allocationBps` + validate tổng
+≤10000 (ADR-030, chi tiết `docs/domain/COMMISSION.md`).
+
 ## Tuyệt đối KHÔNG copy (secrets — chỉ ghi path, không mở/không quote nội dung)
 
 Xác nhận có tồn tại trong `ZenithTasks` (path only, chưa từng mở):

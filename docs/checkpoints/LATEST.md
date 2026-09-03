@@ -1,245 +1,314 @@
-# Checkpoint — Phần 5 hoàn tất
+# Checkpoint — Phần 6 hoàn tất
 
-(Checkpoint Phần 1-4 xem lịch sử git — `git log --oneline` — commit "Part
-1: ...", ..., "Part 4: ...". File này chỉ giữ checkpoint MỚI NHẤT.)
+(Checkpoint Phần 1-5 xem lịch sử git — `git log --oneline` — commit "Part
+1: ...", ..., "Part 5: ...". File này chỉ giữ checkpoint MỚI NHẤT.)
 
-## PHASE 5 STATUS
+## PHASE 6 STATUS
 
-**COMPLETE** — `PART_5_COMPLETE`, `READY_FOR_PART_6`. CRM + Sales +
-Appointment + Customer Operations implement thật trên nền authorization
-Phần 3 + Work Core Phần 4 (không viết lại 2 nền đó) — schema Prisma migrate
-được, domain service + Server Action + UI chạy được end-to-end qua browser
-thật với 3 journey bắt buộc (Reception/Sales, Sales transaction, Follow-up
-No-show), 99 integration test PASS (53 cũ + 46 mới), adversarial code
-review 3 agent độc lập tìm **2 P1 thật** (tính tiền sai, PII over-fetch) +
-nhiều P2 (đã sửa hết), và **1 P2 thật thứ 3 phát hiện trong lúc browser-test
-sau review** (Decimal object lọt qua Server Action boundary — đã sửa).
+**COMPLETE** — `PART_6_COMPLETE`, `READY_FOR_PART_7`. Finance + Payment +
+Receivable + Ledger + Payroll + Commission + Inventory implement thật trên
+nền Sales Phần 5 (Sale CONFIRMED là điểm neo) — schema Prisma migrate được,
+domain service + Server Action + UI chạy được end-to-end qua browser thật
+với 3 journey bắt buộc (Finance/Payment, Payroll two-person-approval,
+Inventory two-person-approval), 133 integration test PASS (99 cũ + 34 mới),
+adversarial code review **5 agent độc lập** (tăng từ 3 ở Phần 5 vì đây là
+domain HIGH/VERY HIGH RISK — tiền + kho dưới concurrency) tìm **4 P0 thật**
+(race condition tiền/lương/kho) + nhiều P1/P2 (đã sửa hết), và **2 bug thật
+thứ 2 phát hiện sau review**: 1 qua browser-test (effectiveFrom same-day
+exclusion) + 1 qua re-verify integration test trước checkpoint (UTC
+truncation regression tự gây ra bởi chính bản vá đầu — xem mục riêng bên
+dưới, đúng tinh thần "never fake PASS/DONE": không chốt checkpoint khi test
+đỏ).
 
 TARGET HEAD: xem commit ngay sau checkpoint này (`git log -1`).
 
-## SCHEMA IMPLEMENTED (mới ở Phần 5)
+## SCHEMA IMPLEMENTED (mới ở Phần 6)
 
-`CustomerSource`, `Lead`, `Customer`, `CustomerInteraction`, `Appointment`,
-`CatalogItem`, `Sale`, `SaleLine` (`prisma/schema.prisma`, migration
-`20260830124601_crm_sales_appointment_customer_operations`, sau migration
-Phần 4 `20260830092334_organization_work_project_foundation`). `WorkItem`
-(Phần 4) mở rộng 2 field optional `customerId`/`appointmentId` — KHÔNG tạo
-engine việc thứ 2 (ADR-014 vẫn áp dụng nguyên vẹn). Verified qua cả `prisma
+`Payment`, `Expense`, `LedgerEntry`, `PayrollProfile`, `PayrollRun`,
+`PayrollItem`, `ApprovalRequest`, `CommissionRule`, `CommissionCalculation`,
+`InventoryLocation`, `InventoryItem`, `StockMovement` (`prisma/schema.prisma`,
+4 migration: `20260831034101_finance_payroll_commission_inventory`,
+`20260831034500_fix_stock_adjustment_direction` (tách `ADJUSTMENT` →
+`ADJUSTMENT_IN`/`ADJUSTMENT_OUT`, tự phát hiện trước review),
+`20260831035000_approval_request_payload` (thêm `payload Json?`, tự phát
+hiện gap thiết kế), `20260831040000_inventory_item_reorder_level` (thêm
+field cho Low Stock signal, tự phát hiện gap). Verified qua cả `prisma
 migrate dev` (local) và `prisma migrate deploy` (fresh-install test trên DB
-trống riêng).
+trống riêng, xem mục FRESH DB TEST).
 
-## KIẾN TRÚC QUYẾT ĐỊNH (ADR-017 → ADR-023, `docs/architecture/DECISIONS.md`)
+## KIẾN TRÚC QUYẾT ĐỊNH (ADR-024 → ADR-035, `docs/architecture/DECISIONS.md`)
 
-- **ADR-017** — Lead là entity thật tách biệt khỏi Customer (bằng chứng:
-  `LEGACY_CAPABILITY_MATRIX.md` dòng L-C04), không gộp chung 1 model với
-  status field.
-- **ADR-018** — `Customer` optional trên `Appointment`/`Sale` ở mọi tầng
-  (schema/domain/UI) — hỗ trợ khách vãng lai ("Khách lẻ") không bắt buộc
-  tạo hồ sơ Customer trước.
-- **ADR-019** — KHÔNG xây Sales Opportunity/Pipeline riêng (0 evidence
-  trong ZenithTasks, Lead→Customer→Sale trực tiếp là đủ cho MVP).
-- **ADR-020** — KHÔNG xây Customer Merge (trùng lặp xử lý qua cảnh báo
-  duplicate lúc tạo, không xây workflow gộp record).
-- **ADR-021** — `SaleLine.discountAmount` là số phẳng caller nhập trực
-  tiếp, KHÔNG port rule engine `ZMechanismDefinition`/`ZMechanismVersion`
-  của ZenithTasks (xác nhận qua archaeology: DRAFT-only, chưa từng chạy
-  production thật).
-- **ADR-022** — Customer/Lead/Appointment/Sale visibility là **Company-wide
-  cho bất kỳ ai có permission `.view` tương ứng** — KHÁC HẲN WorkItem's
-  2-tier SELF/COMPANY của ADR-015 Phần 4. `ownerUserId`/`assignedUserId`
-  không tự nó là ranh giới bảo mật, permission mới là ranh giới. (Bản nháp
-  đầu tiên của ADR này copy nhầm pattern SELF-scope của WorkItem — tự phát
-  hiện và sửa lại theo đúng mục CLVI của Master Prompt TRƯỚC khi viết bất kỳ
-  dòng code nào — xem log phiên.)
-- **ADR-023** — SĐT mã hoá tại chỗ (AES-256-GCM) + hash tra cứu (SHA-256,
-  không salt — rủi ro chấp nhận được ghi rõ), KHÔNG có UI "ẩn mặc định + lộ
-  có audit" như ZenithTasks — `customer.view` + Company scope được coi là
-  đủ kiểm soát truy cập cho Phần 5 MVP.
+- **ADR-024** — Payment/Expense/LedgerEntry thuộc Company, attribution
+  optional qua OrganizationUnit/Project/Customer.
+- **ADR-025** — Payment = tiền vào (gắn Sale CONFIRMED), Expense = tiền ra
+  (category đóng + sourceType MANUAL/PAYROLL_RUN) — không gộp 1 model
+  `Transaction` chung có field `direction`.
+- **ADR-026** — Receivable derived, không lưu bảng riêng — tính trực tiếp
+  từ `sum(Sale.totalAmount CONFIRMED) - sum(Payment.amount POSTED)`.
+- **ADR-027** — LedgerEntry bất biến, sửa bằng correction record
+  (`correctionOfEntryId` self-FK), không bao giờ UPDATE/DELETE.
+- **ADR-028** — `ApprovalRequest` là primitive 2-người-duyệt DÙNG CHUNG cho
+  Payroll Finalize + Inventory Adjustment, mô hình theo `AssistantApproval`
+  (legacy, verify bằng grep trực tiếp — có implementation chạy thật ở
+  `web/src/app/(app)/tro-ly/agent.ts`), KHÔNG theo `ZWorkspacePayrollRun`
+  dual-field pattern (chưa xác minh chạy thật).
+- **ADR-029** — Chỉ 2 phạm vi bắt buộc 2-người: PayrollRun.finalize,
+  Inventory ADJUSTMENT. Payment void/Ledger correction/Commission override
+  chỉ cần single-approver + reason + audit.
+- **ADR-030** — Commission: 3 loại rule đóng (PERCENTAGE_OF_SALE/
+  FIXED_PER_ITEM/TIERED_THRESHOLD) + `allocationBps` tường minh chống
+  double-count (bằng chứng bug double-revenue-count thật từ
+  `FINANCE-DEFINITIONS.md` legacy).
+- **ADR-031** — StockMovement là nguồn sự thật DUY NHẤT cho tồn kho, không
+  cột số dư mutable nào; 6 type đóng gồm `ADJUSTMENT_IN`/`ADJUSTMENT_OUT`.
+- **ADR-032** — Money handling: `Decimal(18,2)`, luôn không âm, chiều
+  tăng/giảm qua entity/type không qua dấu số; Server Action không trả
+  Decimal-bearing Prisma object qua boundary.
+- **ADR-033** — Không đa tiền tệ mới — dùng nguyên `Company.currency` đã có
+  từ Phần 3.
+- **ADR-034** — Idempotency bắt buộc: `@@unique([companyId, idempotencyKey])`
+  trên `Payment` và `StockMovement`, client sinh key qua `crypto.randomUUID()`.
+- **ADR-035** — Không xây AccountsPayable/Invoice/kế toán kép ở Phần 6 —
+  chưa đủ bằng chứng nghiệp vụ thật cần.
 
-Chi tiết implementation + invariant giữ nguyên: `docs/domain/CRM.md`,
-`CUSTOMER.md`, `LEAD.md`, `APPOINTMENT.md`, `SALES.md` (đọc trước khi sửa
-domain này — đặc biệt phần đối chiếu ADR-022 với ADR-015).
+Chi tiết implementation + invariant giữ nguyên: `docs/domain/FINANCE.md`,
+`PAYROLL.md`, `COMMISSION.md`, `INVENTORY.md` (đọc trước khi sửa domain
+này).
 
 ## DOMAIN SERVICE + ACTION + UI
 
-`src/lib/crypto/phone.ts` (mã hoá/giải mã/hash SĐT, unit test riêng),
-`src/lib/domain/sale-totals.ts` (tính tiền Sale thuần, DB-free, unit test
-riêng — nơi xảy ra P1 tiền, xem dưới), `appointment-conflict.ts` (check
-trùng lịch thuần), `customer-service.ts`, `lead-service.ts`,
-`appointment-service.ts`, `sales-service.ts` (Catalog + Sale), `scope-guards.ts`
-mở rộng 5 assert mới. `work-service.ts` (Phần 4) mở rộng
-`getOpenWorkForCustomer`/`hasOpenWorkItemForAppointment` (idempotency check
-cho follow-up No-show). Server Actions: `customer-actions.ts`,
-`lead-actions.ts`, `appointment-actions.ts`, `sales-actions.ts` — thin
-wrapper, cùng pattern `organization-actions.ts` Phần 4 (riêng
-`sales-actions.ts` có 1 khác biệt quan trọng — xem P2 Decimal bên dưới).
-UI: `/c/[code]/{customers,customers/leads,appointments,sales,sales/catalog}`
-+ trang chi tiết từng entity, nav cập nhật ở `company-nav.tsx` (chỉ 3
-top-level item mới: Khách hàng/Lịch hẹn/Kinh doanh — đúng navigation budget
-mục CXCVII, Lead/Catalog chỉ có link phụ), `today/page.tsx` tích hợp thêm
-"Lịch hẹn hôm nay" (`getMyAppointmentsToday` — ngoại lệ cố ý duy nhất của
-ADR-022, tự-scope giống WorkItem vì đây là view cá nhân "của tôi hôm nay").
+`src/lib/domain/payroll-calc.ts` (tính PayrollItem thuần, unit test riêng),
+`commission-calc.ts` (phân bổ hoa hồng thuần + chặn overflow, unit test
+riêng — nơi xảy ra bug rounding, xem dưới), `stock-balance.ts` (tính số dư
+kho thuần từ StockMovement, unit test riêng), `approval-service.ts`
+(`ApprovalRequest` core, bất biến "khác người duyệt lần 2" ở đây),
+`finance-service.ts`, `payroll-service.ts`, `commission-service.ts`,
+`inventory-service.ts` — 4 domain service chính, mỗi cái đều có ít nhất 1
+race-condition fix (xem ADVERSARIAL CODE REVIEW). `scope-guards.ts` mở rộng
+7 assert cross-company mới. Server Actions: `finance-actions.ts`,
+`payroll-actions.ts`, `commission-actions.ts`, `inventory-actions.ts` — thin
+wrapper cùng pattern Phần 5, luôn trả `{id}` hoặc void (không bao giờ trả
+Decimal-bearing object). UI: `/c/[code]/{finance,payroll,inventory}` + trang
+chi tiết từng entity + `payroll/profiles`, `payroll/commission-rules`,
+`inventory/adjustments` — nav cập nhật ở `company-nav.tsx` (3 top-level item
+mới: Tài chính/Lương/Tồn kho). `sales/[saleId]/page.tsx` tích hợp thêm
+Receivable/Payment section + Commission section (integrate trực tiếp, loại
+trừ khỏi mọi UI agent song song để tránh xung đột).
 
 ## PERMISSION MỞ RỘNG
 
-`customer.view/create/update/archive/assign/interaction.create`,
-`lead.view/create/assign/convert`, `appointment.view/create/update/manage`,
-`sales.view/create/update/confirm/cancel`, `catalog.view/manage`
-(`src/lib/permissions/registry.ts`+`presets.ts`). Gỡ `"customer."` khỏi
-`RESERVED_PERMISSION_PREFIXES` (chỉ còn `finance.`/`payroll.`/
-`healthcare.`). `sales.manage` bị loại bỏ sau review — dead permission
-(Sale không có `canActOnX`-theo-ownership để override như
-Appointment/WorkItem, vì ADR-022 đã bỏ self-scope). `READ_ONLY_PERMISSIONS`
-(`company-context.ts`) mở rộng đúng 5 permission `.view` mới — không lặp
-lại P1 Suspended-Company của Phần 4.
+`finance.view/payment.create/payment.void/expense.create/expense.void/
+correction.create`, `payroll.view/manage`, `commission.view/manage`,
+`inventory.view/receive/issue/transfer/adjust/manage` (16 key mới,
+`src/lib/permissions/registry.ts`+`presets.ts`). Gỡ `"healthcare."` khỏi
+`RESERVED_PERMISSION_PREFIXES` — prefix reserved cuối cùng còn lại, dành
+Phần 7. **Phá vỡ pattern nhất quán từ Phần 3**: `payroll.view`/
+`commission.view` KHÔNG cấp mặc định cho VIEWER/MEMBER (quyết định tường
+minh theo anti-drift Q12 — rủi ro lộ lương đồng nghiệp). `READ_ONLY_PERMISSIONS`
+(`company-context.ts`) mở rộng đúng 4 permission `.view` mới. Mọi wrapper
+approval hardcode permission string server-side — không nhận từ tham số
+client (lỗ hổng leo thang quyền tự phát hiện và sửa TRƯỚC khi review, không
+phải do review tìm ra).
 
 ## STATIC TESTS
 
 `npx tsc --noEmit` 0 lỗi · `npx eslint .` 0 lỗi/cảnh báo · `npx next build`
-PASS (19 route, thêm 9 route Phần 5: `/c/[code]/appointments`,
-`/c/[code]/appointments/[appointmentId]`, `/c/[code]/customers`,
-`/c/[code]/customers/[customerId]`, `/c/[code]/customers/leads`,
-`/c/[code]/customers/leads/[leadId]`, `/c/[code]/sales`,
-`/c/[code]/sales/[saleId]`, `/c/[code]/sales/catalog`).
+PASS (30 route, thêm 10 route Phần 6: `/c/[code]/finance`,
+`/c/[code]/finance/payments/[paymentId]`, `/c/[code]/finance/expenses/[expenseId]`,
+`/c/[code]/payroll`, `/c/[code]/payroll/[payrollRunId]`,
+`/c/[code]/payroll/profiles`, `/c/[code]/payroll/commission-rules`,
+`/c/[code]/inventory`, `/c/[code]/inventory/[inventoryItemId]`,
+`/c/[code]/inventory/adjustments`). Cả 3 lệnh chạy lại lần cuối SAU khi sửa
+2 bug phát hiện lúc re-verify trước checkpoint (xem mục riêng bên dưới),
+không chỉ trước review.
 
 ## UNIT + INTEGRATION TESTS
 
-`npm run test` — **44/44 PASS** (21 cũ + 9 `phone.test.ts` + 6
-`sale-totals.test.ts` + 5 `appointment-conflict.test.ts`, bao gồm 2 test hồi
-quy cho P1 tiền — xem dưới). `npm run test:integration` — **99/99 PASS** (53
-cũ + 46 mới `tenant-isolation-part5.itest.ts`): cross-company FK injection
-trên mọi FK mới (Lead/Customer/Interaction/Appointment/Sale/SaleLine/
-organizationUnitId/`WorkItem.customerId`+`appointmentId`), duplicate-detection
-Customer, ADR-022 Company-wide visibility (test dương tính rõ ràng: MemberA
-thấy được record của ManagerA), Lead conversion dedup/reuse/atomicity,
-Appointment conflict detection, No-show idempotent follow-up Work creation,
-Sale money/lifecycle integrity, Suspended-Company chặn ghi ở cả 4 domain
-mới, phone-encryption-at-rest (ciphertext không chứa plaintext, round-trip
-đúng qua `getCustomerDetail`).
+`npm run test` — **64/64 PASS** (44 cũ + 4 `payroll-calc.test.ts` + 9
+`commission-calc.test.ts` + 7 `stock-balance.test.ts`, gồm 1 test hồi quy
+rounding + 1 test hồi quy double-count cho bug hoa hồng thật — xem dưới).
+`npm run test:integration` — **133/133 PASS** (99 cũ + 34 mới
+`tenant-isolation-part6.itest.ts`): cross-company FK injection trên mọi FK
+mới, vòng đời PayrollRun đầy đủ (kể cả live assertion "cùng actor không
+duyệt lần 2 được"), Commission allocation + chặn double-count + cross-company
+contributor validation, Inventory movement + chặn âm kho + transfer + duyệt
+điều chỉnh, Suspended-Company chặn ghi cả 4 domain mới, và **describe block
+riêng cho concurrency** ("Concurrency — race condition regression (P0 fix)")
+dùng `Promise.allSettled` bắn THẬT 2 lệnh domain-service song song vào cùng
+1 Postgres instance (không mô phỏng) cho `recordPayment`/
+`finalizePayrollRun`/`issueStock`, xác nhận đúng 1 trong 2 thành công.
 
-## ADVERSARIAL CODE REVIEW (3 agent độc lập)
+## ADVERSARIAL CODE REVIEW (5 agent độc lập — tăng từ 3 ở Phần 5)
 
-`docs/security/RED_TEAM_CODE_REVIEW_PART5.md`. Agent 1 (tenant-isolation
-attacker, 8 câu hỏi): NONE khai thác được. Agent 2 (simplicity/spec-fidelity,
-11 câu hỏi): NONE — toàn bộ 7 ADR đối chiếu đúng code thật, 2 P2 nhỏ. Agent
-3 (money/PII integrity — mới, riêng cho Phần 5 vì rủi ro tiền+PII không tồn
-tại ở Phần 4, 12 câu hỏi): **tìm 2 P1 thật**.
+`docs/security/RED_TEAM_CODE_REVIEW_PART6.md`. Agent 1 (tenant-isolation):
+1 P1 + 1 P2. Agent 2 (simplicity/spec-fidelity): FAIL ban đầu trên ADR-034
+(đã sửa). Agent 3 (money/PII integrity): 2 P0 + 1 P2. Agent 4
+(approval-integrity, MỚI ở Phần 6 — domain đầu tiên có 2-người-duyệt):
+PASS + 2 P2. Agent 5 (idempotency/concurrency, MỚI ở Phần 6): 2 P0 xác nhận
++ 2 P1.
 
-1. **P1 Money** — `calculateSaleTotals` (cũ) cộng dồn `discountAmount` THÔ
-   từng dòng rồi mới clamp 1 lần ở cấp Sale, trong khi `buildLineTotals`
-   viết tay clamp riêng từng dòng → khi 1 dòng chiết khấu vượt chính giá
-   trị dòng đó, `Sale.totalAmount` lệch với `sum(SaleLine.lineTotal)` (repro
-   cụ thể: 60.000đ vs 100.000đ thật). Đã sửa: `calculateSaleTotals` tính lại
-   để bất biến `subtotalAmount - discountAmount === totalAmount ===
-   sum(lineTotal)` đúng bằng cấu trúc; `buildLineTotals` gọi thẳng
-   `calculateLineTotal` đã unit-test thay vì công thức tay (root cause thật).
-2. **P1 PII** — `phoneCiphertext`/`phoneHash` bị over-fetch ra khỏi tầng
-   service ở mọi list/detail query KHÔNG phải `getCustomerDetail`/
-   `getLeadDetail` (6 vị trí). Chưa leak ra browser thật nhưng `phoneHash`
-   không salt trên keyspace nhỏ (SĐT VN) = gần tương đương lộ SĐT nếu rò rỉ
-   dù 1 lần. Đã sửa bằng Prisma `omit` ở cả top-level và nested `include`.
+**4 P0 thật tìm thấy** (2 agent độc lập cùng tìm ra `recordPayment`/
+`finalizePayrollRun` — cross-corroborated):
+1. `calculatePayrollRun` — nhánh `update` của `payrollItem.upsert` hand-roll
+   `netAmount`, làm mất bonus/deduction đã điều chỉnh lần trước. Sửa: cả 2
+   nhánh create/update đều gọi `calculatePayrollItemTotals`.
+2. `recordPayment` — race điều kiện đọc-số-dư-rồi-ghi dưới Postgres READ
+   COMMITTED, có thể 2 Payment đồng thời cùng vượt tổng tiền Sale. Sửa:
+   `SELECT...FOR UPDATE` khoá dòng liên quan trong transaction.
+3. `finalizePayrollRun` — race tương tự, rủi ro chi lương 2 lần cùng 1 kỳ.
+   Sửa cùng pattern, cả thân hàm chuyển vào trong transaction có khoá.
+4. `issueStock`/`transferStock` — race tương tự trên tồn kho, có thể xuất
+   âm kho dưới truy cập đồng thời. Sửa cùng pattern.
 
-Không còn P0/P1 mở sau khi sửa. Chi tiết đầy đủ + toàn bộ P2 đã sửa/chấp
-nhận: xem file review.
+**Các P1/P2 đáng chú ý khác đã sửa**: rounding bug `allocateCommissionAmount`
+(4×25% trên tổng=2 → tổng ra 3, không phải 2 — sửa dùng `Math.floor` cho
+phần không phải cuối); cross-tenant gap `calculateCommissionForSale` (chưa
+validate contributor userId thuộc đúng Company); PII over-fetch
+`getPaymentDetail` (thiếu `omit` SĐT customer — lặp lại đúng bug class Phần
+5); idempotencyKey namespace-collision ở `executeApprovedStockAdjustment`
+(bare `request.id` chia sẻ cột với key client tự đặt — sabotage vector);
+`getPendingApprovalRequests` không bao giờ trả APPROVED → adjustment đã
+duyệt đủ nhưng chưa thực thi biến mất khỏi UI vĩnh viễn (sửa bằng
+`getActionableStockAdjustmentRequests` mới).
 
-## BUG THẬT THỨ 3 — PHÁT HIỆN QUA BROWSER TEST SAU REVIEW (không phải Phần 5
-review tìm ra, review đã PASS trước đó)
+Không còn P0/P1 mở sau khi sửa. Chi tiết đầy đủ: xem file review.
 
-Lúc browser-verify Journey 2 (Sales), click "Xác nhận" trên `SaleActions`
-(Client Component) không có phản ứng — console log lộ nguyên nhân thật:
-`confirmSaleAction`/`cancelSaleAction` (`sales-actions.ts`) trả thẳng object
-Prisma Sale (chứa field `Decimal` — class instance, không phải plain
-object) qua boundary Server Action → Client Component. Next.js RSC không
-serialize được `Decimal`, log lỗi "Only plain objects can be passed..." mỗi
-lần gọi — không chặn hẳn action (Sale vẫn confirm/cancel đúng trong DB) vì
-chỉ là dev-mode console.error, nhưng đây là hành vi mong manh thật, có thể
-vỡ khác đi ở production build. **Đã sửa**: 6 hàm trong `sales-actions.ts`
-không còn trả nguyên object Prisma — chỉ trả phần dữ liệu client thực sự
-cần (`createSaleAction` trả `{ id }` vì `create-sale-form.tsx` cần redirect;
-5 hàm còn lại (`createCatalogItemAction`/`updateCatalogItemAction`/
-`updateDraftSaleAction`/`confirmSaleAction`/`cancelSaleAction`) không trả gì
-vì không caller nào dùng giá trị trả về — xác nhận bằng grep toàn bộ
-`src/app`). Re-verify: tạo/xác nhận/huỷ 1 Sale test mới sau khi sửa, 0
-console error. `npx tsc`/`npx eslint`/`npm run test`/`npm run
-test:integration`/`npx next build` chạy lại toàn bộ sau sửa, đều PASS.
+## BUG THẬT PHÁT HIỆN NGOÀI REVIEW — 2 lớp riêng biệt
 
-## BROWSER TESTS (3 journey bắt buộc, Manager persona)
+**Lớp 1 — qua browser test (Journey B, trước review kết thúc)**:
+`effectiveFrom` PayrollProfile mặc định `new Date()` (timestamp chính xác)
+có thể MUỘN HƠN `periodStart` cùng ngày → lương set cùng ngày kỳ lương bắt
+đầu bị loại khỏi kỳ đó âm thầm. Sửa lần 1: transform effectiveFrom về đầu
+ngày bằng `getFullYear/getMonth/getDate` (giờ địa phương).
 
-**Journey 1 — Reception/Sales (mục CLXXXVIII):** Tạo Customer "Trần Thị
-Mai" (SĐT `0912345678`) → chuyển tới trang chi tiết, SĐT giải mã hiển thị
-đúng plaintext (xác nhận round-trip AES-256-GCM thật, không chỉ unit test)
-→ "Tạo lịch hẹn" quick-action mang theo `customerId` → tạo Appointment → xuất
-hiện đúng trong danh sách Lịch hẹn → xuất hiện đúng trong "Hôm nay" phần
-"Lịch hẹn hôm nay" (tích hợp Today/Appointment thật, mục CVII/CLXXXVI).
+**Lớp 2 — qua re-verify integration test TRƯỚC khi chốt checkpoint (không
+phải do agent review nào tìm ra, tự phát hiện bằng cách chạy lại toàn bộ
+test suite trước khi viết checkpoint đúng tinh thần "never fake PASS")**:
+Bản vá Lớp 1 dùng `getFullYear/getMonth/getDate` (giờ ĐỊA PHƯƠNG của máy
+chạy Node) để truncate effectiveFrom — trong khi `periodStart` và mọi
+`effectiveFrom` tường minh khác đều được `z.coerce.date()` parse theo UTC
+midnight (chuẩn parse ISO date-only string). Trên máy chạy ở timezone lùi
+sau UTC, truncate theo giờ địa phương làm 1 `effectiveFrom` UTC-midnight
+tường minh (vd `new Date("2026-06-01")`) bị lùi lại 1 ngày
+(`2026-05-31`) — gây `AssertionError` thật trong
+`tenant-isolation-part6.itest.ts` (test "Thiết lập PayrollProfile
+effective-dated"). **Sửa lần 2**: đổi sang `Date.UTC(d.getUTCFullYear(),
+d.getUTCMonth(), d.getUTCDate())` — nhất quán UTC-midnight ở MỌI nơi so
+sánh ngày trong Payroll, không còn phụ thuộc timezone máy chạy.
 
-**Journey 2 — Sales (mục CLXXXIX):** Từ Customer → "Tạo giao dịch" mang
-theo `customerId` → thêm dòng hàng tự nhập ("Khám tổng quát", 500.000đ) →
-Tạo giao dịch (redirect đúng sang trang chi tiết Sale) → Xác nhận (DRAFT →
-CONFIRMED, đúng tiền, đúng timestamp) → quay lại Customer detail, mục "Giao
-dịch" hiển thị đúng Sale vừa xác nhận. (Đây là journey phát hiện bug Decimal
-ở trên — sửa xong mới coi là hoàn tất, không fake PASS.)
+Sửa lần 2 làm lộ ra **1 bug thứ 3** (thật ra là gap trong chính test, không
+phải source): test "Vòng đời đầy đủ ... sinh đúng Expense SALARY" dùng
+`db.expense.findFirst` không filter — khi memberA có `PayrollProfile` từ
+test trước đó (chạy cùng `beforeAll`, không `beforeEach`) bleed trùng kỳ
+lương của test này, PayrollRun sinh RA 2 Expense (managerA 8tr + memberA
+10tr), `findFirst` trả về không xác định (order Postgres không đảm bảo).
+Sửa: đổi `findFirst` → `findMany` + `.find(e => amount === 8_000_000)`,
+không giả định Expense DUY NHẤT của run.
 
-**Journey 3 — Follow-up (mục CXC):** Appointment (Journey 1) → "Không đến"
-(No-show) → follow-up WorkItem tự động xuất hiện trong "Việc của tôi hôm
-nay" ("Theo dõi khách không đến hẹn: ...", ưu tiên Cao) → Bắt đầu → Hoàn
-thành → biến mất khỏi danh sách việc mở (đúng vòng đời WorkItem Phần 4,
-xác nhận tích hợp CRM↔Work Core hoạt động thật end-to-end qua UI thật).
+Cả 3 sửa đã re-run toàn bộ `tsc`/`eslint`/`test`/`test:integration`/`next
+build` — tất cả PASS trước khi chốt checkpoint này.
+
+## BROWSER TESTS (3 journey bắt buộc)
+
+**Journey A — Finance/Payment:** Sale CONFIRMED có sẵn từ Phần 5 → ghi nhận
+Payment 300.000đ → Receivable derived giảm đúng → xuất hiện đúng trong
+danh sách Thanh toán/Sổ cái ở `/finance`.
+
+**Journey B — Payroll two-person-approval (đầy đủ vòng đời):** set lương
+Trần Nhân Viên 8.500.000đ (`/payroll/profiles`, đây là journey phát hiện
+bug effectiveFrom Lớp 1) → tạo PayrollRun tháng 10/2026 → Tính lương (đúng
+số) → Duyệt kiểm tra → Xin chốt sổ (tạo ApprovalRequest) → Manager Duyệt
+lần 1 → **live-test Manager tự Duyệt lần 2: bị chặn đúng lỗi hiển thị trên
+UI** → đăng xuất, đăng nhập Founder (actor khác thật) → Founder Duyệt lần 2
+thành công (ApprovalRequest APPROVED) → Chốt sổ → xác nhận Expense (category
+Lương, 8.500.000đ) VÀ LedgerEntry (Trả lương, 8.500.000đ) tự động sinh đúng
+qua trang `/finance` (cả 2 tab Chi phí và Sổ cái) → trang PayrollRun về
+trạng thái cuối "Đã chốt sổ", không còn nút hành động nào.
+
+**Journey C — Inventory two-person-approval:** tạo InventoryItem "Khẩu
+trang y tế" + InventoryLocation "Kho chính Hồng Phúc" → Nhập kho 100 → Xuất
+kho 20 (số dư đúng 80) → Gửi yêu cầu điều chỉnh giảm 5 → Founder tự
+Duyệt lần 1 (người yêu cầu = người duyệt lần 1, hợp lệ vì bất biến chỉ chặn
+lần-1-so-với-lần-2) → **live-test Founder tự Duyệt lần 2: bị chặn đúng lỗi
+hiển thị trên UI (cùng bất biến với Payroll, dùng chung 1 hàm)** → đăng
+xuất, đăng nhập Manager (actor khác thật) → Duyệt lần 2 thành công → trang
+`/inventory/adjustments` hiện đúng nút "Thực thi điều chỉnh" (**live-verify
+trực tiếp fix `getActionableStockAdjustmentRequests`** — request APPROVED
+không còn biến mất khỏi danh sách) → Thực thi → request biến mất khỏi danh
+sách, số dư kho cập nhật đúng 75 (100-20-5).
 
 ## FRESH DB TEST
 
-Tạo database trống riêng → `prisma migrate deploy` áp toàn bộ 3 migration
-sạch (Phần 3+4+5) → `bootstrap-founder` chạy thành công → xoá DB tạm. DB dev
-chính giữ nguyên dữ liệu browser-test Phần 4+5 (Founder + Company + demo
-user + Assignment + Project + Customer/Appointment/Sale mẫu) — hữu ích cho
-Phần 6 (Finance cần Sale đã CONFIRMED để test công nợ/thanh toán).
+Tạo database trống riêng (`tapdoan_fresh_test_part6`) → `prisma migrate
+deploy` áp toàn bộ 7 migration sạch (Phần 3+4+5+6, 4 migration Phần 6) →
+`bootstrap-founder` chạy thành công → xoá DB tạm. DB dev chính giữ nguyên
+dữ liệu browser-test Phần 4+5+6.
 
-## SECURITY RISKS (còn mở, kế thừa từ Phần 3/4, không phải HARD BLOCK)
+## SECURITY RISKS (còn mở, kế thừa từ Phần 3/4/5, không phải HARD BLOCK)
 
 1. `AuditEvent` chưa có DB-level trigger chống UPDATE/DELETE trực tiếp.
 2. Không có session revocation list/tokenVersion.
-3. `phoneHash` (SHA-256, không salt) trên keyspace SĐT VN nhỏ — rủi ro
-   dictionary-attack nếu hash bị lộ; chấp nhận cho MVP, cần salt hoặc HMAC
-   với secret riêng nếu Phần 6+ mở API/export dùng field này.
-4. Composite FK/DB constraint cho Finance/Healthcare chưa áp dụng (domain đó
-   chưa tồn tại) — nhắc Phần 6/7 không quên.
+3. `phoneHash` (SHA-256, không salt) trên keyspace SĐT VN nhỏ — chấp nhận
+   cho MVP, cần salt/HMAC nếu Phần 7+ mở API/export dùng field này.
+4. Composite FK/DB constraint cho Healthcare chưa áp dụng (domain đó chưa
+   tồn tại) — nhắc Phần 7 không quên.
+5. `LedgerEntry`/`StockMovement` bất biến ở tầng application, chưa có
+   DB-level trigger chống UPDATE/DELETE trực tiếp (cùng loại rủi ro với mục
+   1) — chấp nhận cho MVP, domain service là con đường ghi DUY NHẤT hiện
+   tại (không có API/admin tool nào khác chạm DB trực tiếp).
 
 ## DEFERRED ITEMS
 
-Sales Opportunity/Pipeline (ADR-019) · Customer Merge (ADR-020) · rule
-engine chiết khấu (ADR-021) · "ẩn SĐT mặc định + lộ có audit" UI (ADR-023) ·
-`updateDraftSale` — domain function tồn tại, CỐ Ý chưa có UI caller ở Phần
-5 (ghi rõ trong `SALES.md`, không phải thiếu sót) · Finance/Payroll/
-Commission/Inventory/Healthcare (Phần 6+) · Milestone/Checklist riêng cho
-Project (ADR-016, Phần 4) · OrganizationUnit move/reparent UI.
+Invoice/hoá đơn điện tử, AccountsPayable, đa tiền tệ, kế toán kép
+(ADR-035/033) · định giá tồn kho FIFO/LIFO, barcode/serial/lot tracking,
+Purchase Order/Supplier (`INVENTORY.md`) · Healthcare Vertical (Phần 7) ·
+Milestone/Checklist riêng cho Project (ADR-016, Phần 4) · OrganizationUnit
+move/reparent UI · mọi mục deferred Phần 3/4/5 (Sales Opportunity, Customer
+Merge, rule engine chiết khấu, "ẩn SĐT + lộ có audit" UI, ...).
 
-## DO NOT REDO (bổ sung Phần 5, kế thừa toàn bộ danh sách Phần 3+4)
+## DO NOT REDO (bổ sung Phần 6, kế thừa toàn bộ danh sách Phần 3+4+5)
 
-- Không tự-scope (self-scope) visibility Customer/Lead/Appointment/Sale
-  theo `ownerUserId`/`assignedUserId` — ADR-022 là Company-wide theo
-  permission `.view`, CỐ Ý khác WorkItem (ADR-015). Ngoại lệ duy nhất đã
-  chốt: `getMyAppointmentsToday` (view cá nhân "của tôi hôm nay", không
-  phải authorization boundary).
-- Không thêm quan hệ Customer/Lead vào `include`/`select` mà thiếu `omit: {
-  phoneCiphertext: true, phoneHash: true }` — CHỈ `getCustomerDetail`/
-  `getLeadDetail` được chạm 2 field này (và phải strip khỏi return value
-  bằng destructure trước khi trả ra ngoài service layer).
-- Không tính `SaleLine.lineTotal`/`Sale.totalAmount` bằng công thức viết tay
-  riêng — LUÔN gọi `calculateLineTotal`/`calculateSaleTotals`
-  (`sale-totals.ts`) đã unit-test; không clamp discount ở cấp Sale tách rời
-  khỏi clamp cấp dòng — đây chính là root cause P1 tiền vừa vá.
-- Không để Server Action (đặc biệt trong `src/lib/actions/*.ts`) trả thẳng
-  object Prisma chứa field `Decimal` qua boundary Server→Client — chỉ trả
-  phần dữ liệu client thực sự dùng (thường chỉ cần `{ id }` hoặc không cần
-  trả gì nếu caller chỉ gọi `router.refresh()`).
-- Không port rule engine `ZMechanismDefinition`/`ZMechanismVersion` của
-  ZenithTasks (ADR-021) — DRAFT-only, chưa từng chạy production thật.
-- Không tạo model Customer Merge hoặc Sales Opportunity/Pipeline riêng
-  (ADR-019/ADR-020) trừ khi có bằng chứng nghiệp vụ thật mới.
-- Không thiết kế lại authorization foundation Phần 3 hay Work Core Phần 4 —
-  Phần 5 chỉ mở rộng `WorkItem` bằng 2 field optional, không tạo engine
-  việc thứ 2 (ADR-014 vẫn áp dụng).
+- Không viết bất kỳ hàm domain nào có pattern "đọc số dư/kiểm tra hợp lệ →
+  ghi" trên tiền/kho mà KHÔNG khoá dòng liên quan bằng `SELECT...FOR UPDATE`
+  bên trong `db.$transaction` trước khi đọc lại và xác minh — Postgres READ
+  COMMITTED mặc định KHÔNG tự chặn race này (4 P0 thật của Phần 6 đều cùng
+  1 root cause class).
+- Không để bất kỳ wrapper approval nào (2-người-duyệt hay không) nhận
+  `permission` như tham số truyền từ ngoài vào rồi chuyển tiếp cho
+  `requireCompanyContextForActor` — luôn hardcode permission string ngay
+  trong hàm.
+- Không tính `PayrollItem.netAmount` bằng công thức viết tay ở bất kỳ nhánh
+  nào (create hay update) — LUÔN gọi `calculatePayrollItemTotals`
+  (`payroll-calc.ts`).
+- Không truncate/so sánh ngày hiệu lực (`effectiveFrom`/`periodStart`/bất kỳ
+  field ngày nào dùng để so sánh kỳ) bằng getter GIỜ ĐỊA PHƯƠNG
+  (`getFullYear`/`getMonth`/`getDate`) — luôn dùng `getUTC*`/`Date.UTC`,
+  nhất quán với cách `z.coerce.date()` parse date-only string thành UTC
+  midnight. Đây chính là root cause của bug Lớp 2 (mục riêng ở trên).
+  Regression test giữ nguyên: `tenant-isolation-part6.itest.ts` mục "Thiết
+  lập PayrollProfile effective-dated".
+- Không viết test integration `findFirst` không filter khi entity có thể có
+  NHIỀU record hợp lệ cho cùng điều kiện query (đặc biệt trong file dùng
+  `beforeAll` thay vì `beforeEach` — fixture bleed giữa các test là rủi ro
+  thật, không phải lý thuyết) — dùng `findMany` + `.find()`/`.filter()` với
+  điều kiện đủ để xác định đúng 1 bản ghi mong muốn.
+- Không dùng `allocationBps`/công thức chia hoa hồng với `Math.round` cho
+  MỌI phần — phần không phải cuối luôn `Math.floor`, chỉ phần cuối nhận
+  phần dư, để bất biến `sum(allocations) === totalAmount` đúng bằng cấu
+  trúc (`commission-calc.ts`).
+- Không thêm 1 loại `StockMovement`/`LedgerEntry` mới mà `quantity`/`amount`
+  có thể âm — chiều tăng/giảm LUÔN qua `type`/entity, không qua dấu số.
+- Không dùng `request.id`/bất kỳ ID nội bộ nào làm `idempotencyKey` trực
+  tiếp khi cột đó CHIA SẺ constraint với key client tự đặt — luôn thêm
+  namespace prefix (vd `` `approval:${id}` ``) để tránh sabotage
+  namespace-collision.
+- Không gọi `getPendingApprovalRequests` (dùng chung cho mọi domain
+  2-người-duyệt) để render UI "còn việc cần làm" nếu domain đó có bước
+  thực thi SAU KHI đã APPROVED — hàm này cố tình không trả APPROVED (đúng
+  cho Payroll, sai cho domain có bước thực thi riêng như Inventory). Viết
+  hàm `getActionableXRequests` riêng nếu domain có bước thực thi sau duyệt.
 
 ## NEXT
 
-Phần 6 — Finance + Payroll + Commission + Inventory. Xem
+Phần 7 — Healthcare Vertical + Legacy Clinic Parity. Xem
 `docs/project/CURRENT_WAVE.md` để biết input đã sẵn sàng.

@@ -1,5 +1,23 @@
 # Target Architecture
 
+## Cập nhật Phần 6 (Finance + Payroll + Commission + Inventory — IMPLEMENTED)
+
+`Payment`/`Expense`/`LedgerEntry`/`PayrollProfile`/`PayrollRun`/
+`PayrollItem`/`ApprovalRequest`/`CommissionRule`/`CommissionCalculation`/
+`InventoryLocation`/`InventoryItem`/`StockMovement` implement thật trên nền
+Company/Sales (Phần 5) đã có — không mở boundary tenant mới, mọi entity
+thuộc `Company`. Khác biệt kiến trúc đáng chú ý so với Phần 4/5: đây là
+Phần đầu tiên có concurrency risk thật (tiền + kho dưới ghi đồng thời) —
+MỌI hàm domain có pattern "đọc số dư/kiểm tra hợp lệ → ghi" đều khoá dòng
+liên quan bằng `SELECT...FOR UPDATE` bên trong `db.$transaction` trước khi
+đọc lại và xác minh (`recordPayment`, `finalizePayrollRun`,
+`calculatePayrollRun`, `calculateCommissionForSale`, `issueStock`,
+`transferStock`) — pattern mới, không tồn tại ở Phần 3/4/5 vì các domain đó
+không có race tiền/kho thật. Cũng là Phần đầu tiên có primitive 2-người-
+duyệt dùng chung giữa 2 domain khác nhau (`ApprovalRequest`, ADR-028).
+Chi tiết: `docs/domain/FINANCE.md`, `PAYROLL.md`, `COMMISSION.md`,
+`INVENTORY.md`. ADR-024 đến ADR-035 trong `DECISIONS.md`.
+
 ## Cập nhật Phần 5 (CRM + Sales + Appointment + Customer Operations — IMPLEMENTED)
 
 `Customer`/`Lead`/`CustomerInteraction`/`Appointment`/`CatalogItem`/`Sale`/

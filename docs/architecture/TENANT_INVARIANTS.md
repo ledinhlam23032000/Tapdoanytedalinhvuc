@@ -122,6 +122,25 @@ theo owner (ADR-022) — test phải xác nhận đúng "Company-wide theo permi
 KHÔNG test kiểu "MemberA không thấy Customer của MemberB trong cùng Company"
 (đó sẽ là test SAI, đi ngược ADR-022 tường minh).
 
+## Cập nhật Phần 6 — mở rộng sang Finance/Payroll/Commission/Inventory
+
+Toàn bộ nguyên tắc nền 1-5 áp dụng nguyên vẹn cho `Payment`/`Expense`/
+`LedgerEntry`/`PayrollProfile`/`PayrollRun`/`PayrollItem`/`ApprovalRequest`/
+`CommissionRule`/`CommissionCalculation`/`InventoryLocation`/
+`InventoryItem`/`StockMovement`. Acceptance test thật:
+`src/lib/__tests__/tenant-isolation-part6.itest.ts` (133 test) — cross-company
+FK injection trên mọi FK mới, vòng đời PayrollRun đầy đủ kể cả assertion
+sống "cùng actor không thể duyệt lần 2" (`secondApproveRequest`), Commission
+allocation + chặn double-count + cross-company, Inventory movement + chặn
+âm kho + transfer + duyệt điều chỉnh, Suspended-Company chặn ghi cả 4 domain
+mới. Điểm khác Phần 3/4/5: Phần 6 là Phần đầu tiên có **describe block
+riêng cho concurrency** ("Concurrency — race condition regression (P0
+fix)") — dùng `Promise.allSettled` bắn thật 2 lệnh domain-service song song
+vào cùng 1 Postgres instance (không mô phỏng), xác nhận đúng 1 trong 2 lệnh
+thành công cho `recordPayment`/`finalizePayrollRun`/`issueStock` — bằng
+chứng thật rằng khoá `SELECT...FOR UPDATE` hoạt động, không chỉ review logic
+tĩnh.
+
 ## Không lặp lại (đối chiếu trực tiếp bằng chứng từ Legacy Capability Matrix)
 
 - `v2-access.ts`: `user.role === "ADMIN"` bypass toàn bộ `ZProjectMember`
