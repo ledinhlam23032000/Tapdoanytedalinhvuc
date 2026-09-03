@@ -35,9 +35,15 @@ docx, chỉ đoạn Phần 7).
   đã chứng minh chạy đúng trên 2 domain độc lập (Payroll + Inventory,
   live-verify qua browser cả hai). Phần 7 nếu cần duyệt 2 người (vd xoá hồ
   sơ y tế, sửa chẩn đoán đã chốt) thì DÙNG LẠI, không tạo model duyệt thứ 2.
-- `RESERVED_PERMISSION_PREFIXES` giờ CHỈ còn `"healthcare."` — bỏ khỏi
-  reserved khi Phần 7 thêm permission thật (cùng pattern đã làm với
-  `customer.` ở Phần 5, `finance.`/`payroll.` ở Phần 6).
+- `RESERVED_PERMISSION_PREFIXES` (`registry.ts:105`) giờ CHỈ còn
+  `"healthcare."` — bỏ khỏi reserved khi Phần 7 thêm permission thật (cùng
+  pattern đã làm với `customer.` ở Phần 5, `finance.`/`payroll.` ở Phần 6).
+  **Lưu ý chính xác:** hằng số này được export nhưng KHÔNG nơi nào dùng —
+  đây là marker khai báo-thuần **có chủ đích** (comment ngay trên nó ghi rõ:
+  "CHỈ khai báo tên, KHÔNG implement check nào cho tới khi domain đó thực sự
+  tồn tại", mục CCXXVI). Nên **sẽ KHÔNG có gì throw** nếu Phần 7 quên gỡ —
+  rủi ro thật là để lại marker cũ gây hiểu nhầm, không phải lỗi runtime.
+  Đừng trông chờ nó chặn giúp.
 - `InventoryItem`/`StockMovement` (Phần 6) — vật tư y tế tiêu hao trong 1 ca
   điều trị nên trừ kho qua đúng `issueStock()` đã có, KHÔNG tạo engine kho
   thứ 2 cho Healthcare (cùng tinh thần ADR-014 với WorkItem).
