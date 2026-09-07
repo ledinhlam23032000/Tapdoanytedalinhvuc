@@ -1,5 +1,29 @@
 # Target Architecture
 
+## Cập nhật Phần 7 (Healthcare / Aesthetics Vertical — IMPLEMENTED)
+
+12 entity Healthcare (`MedicalCase`, `HealthcareAppointmentContext`,
+`ClinicalConsultation` + addendum + screening, `Procedure` +
+`ProcedureMaterialUsage`, `ConsentTemplate`/`ConsentRecord`,
+`ClinicalPhoto`, `MedicalFollowUp`) + `CompanyModule` +
+`CompanyMembershipPack`, đặt trong `src/lib/domain/healthcare/`.
+
+Khác biệt kiến trúc đáng chú ý nhất so với Phần 3-6: đây là Phần đầu tiên có
+**bounded context với chiều phụ thuộc một chiều được enforce** — Healthcare
+import Core, Core tuyệt đối không import Healthcare (ADR-036). Kéo theo một
+quyết định thiết kế cụ thể: `HealthcareAppointmentContext` treo BÊN CẠNH
+`Appointment` (Appointment không có FK trỏ sang Healthcare) để vẫn đạt quan
+hệ Case 1-N Appointment mà không phá chiều phụ thuộc.
+
+Cũng là Phần đầu tiên có **hai cổng độc lập** cho mọi thao tác: permission
+(`healthcare.*`) VÀ module enablement (`assertHealthcareModuleEnabled`) —
+hai cổng không thay thế nhau. Và là Phần đầu tiên quyền không còn chỉ đến từ
+`rolePreset`: thêm permission pack theo từng membership (ADR-051), vì "bác
+sĩ" không phải một tier quản lý.
+
+Chi tiết: `docs/domain/HEALTHCARE.md`. ADR-036 đến ADR-051 trong
+`DECISIONS.md`.
+
 ## Cập nhật Phần 6 (Finance + Payroll + Commission + Inventory — IMPLEMENTED)
 
 `Payment`/`Expense`/`LedgerEntry`/`PayrollProfile`/`PayrollRun`/

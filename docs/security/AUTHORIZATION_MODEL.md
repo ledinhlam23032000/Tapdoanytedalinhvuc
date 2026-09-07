@@ -169,3 +169,24 @@ truyền vào rồi chuyển tiếp cho `requireCompanyContextForActor`. Đây l
 giới mới cần giữ nguyên cho MỌI approval domain tương lai (Phần 7+): tham
 số permission client-controlled đi tới hàm authorization là lỗ hổng leo
 thang quyền, bất kể domain nào.
+
+## Cập nhật Phần 7 — Healthcare thêm 2 tầng, KHÔNG đổi cơ chế Phần 3
+
+Tầng `resolveCompanyPermissions`/`requireCompanyContextForActor` giữ nguyên.
+Phần 7 thêm đúng hai thứ:
+
+**1. Permission pack (ADR-051).** `resolveCompanyPermissions` giờ trả về
+`rolePreset` **hợp** các pack gắn theo `CompanyMembership`. Đây là thay đổi
+DUY NHẤT ở tầng resolver kể từ Phần 3, và nó cần thiết vì với 5 preset generic
+thì không diễn đạt nổi các ràng buộc âm tính mà spec yêu cầu test. Membership
+không ACTIVE → resolver trả set rỗng TRƯỚC khi đọc pack, nên thu hồi membership
+vô hiệu hoá pack ngay lập tức.
+
+**2. Module enablement là cổng thứ hai, độc lập.**
+`assertHealthcareModuleEnabled(companyId)` gọi ngay sau
+`requireCompanyContextForActor` trong MỌI domain service healthcare. Đây
+không phải kiểm tra ở tầng UI — có quyền mà Company chưa bật phân hệ thì
+domain service vẫn từ chối.
+
+`RESERVED_PERMISSION_PREFIXES` giờ rỗng. Lưu ý đã xác minh: hằng số này chưa
+bao giờ được dùng ở đâu — nó là marker tài liệu, không phải cơ chế bảo vệ.

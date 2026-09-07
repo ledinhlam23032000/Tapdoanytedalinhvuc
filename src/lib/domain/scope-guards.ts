@@ -133,3 +133,65 @@ export async function assertSameCompanyInventoryLocation(companyId: string, loca
   }
   return location;
 }
+
+// ===== Phần 7 — Healthcare Vertical (ADR-038) =====
+// Mỗi entity đọc companyId của CHÍNH NÓ. Tuyệt đối không suy Company qua
+// customerId -> Customer.companyId: đó chính là lớp lỗ hổng mà legacy mắc
+// phải ở dạng khác (không model nào có tenant scoping, phân quyền toàn bộ
+// nằm ở tầng ứng dụng).
+
+export async function assertSameCompanyMedicalCase(companyId: string, medicalCaseId: string) {
+  const record = await db.medicalCase.findUnique({ where: { id: medicalCaseId } });
+  if (!record || record.companyId !== companyId) {
+    throw new AuthorizationError("Hồ sơ bệnh án không hợp lệ trong công ty này.");
+  }
+  return record;
+}
+
+export async function assertSameCompanyConsultation(companyId: string, consultationId: string) {
+  const record = await db.clinicalConsultation.findUnique({ where: { id: consultationId } });
+  if (!record || record.companyId !== companyId) {
+    throw new AuthorizationError("Phiếu khám không hợp lệ trong công ty này.");
+  }
+  return record;
+}
+
+export async function assertSameCompanyProcedure(companyId: string, procedureId: string) {
+  const record = await db.procedure.findUnique({ where: { id: procedureId } });
+  if (!record || record.companyId !== companyId) {
+    throw new AuthorizationError("Thủ thuật không hợp lệ trong công ty này.");
+  }
+  return record;
+}
+
+export async function assertSameCompanyConsentTemplate(companyId: string, templateId: string) {
+  const record = await db.consentTemplate.findUnique({ where: { id: templateId } });
+  if (!record || record.companyId !== companyId) {
+    throw new AuthorizationError("Mẫu phiếu đồng ý không hợp lệ trong công ty này.");
+  }
+  return record;
+}
+
+export async function assertSameCompanyConsentRecord(companyId: string, consentId: string) {
+  const record = await db.consentRecord.findUnique({ where: { id: consentId } });
+  if (!record || record.companyId !== companyId) {
+    throw new AuthorizationError("Phiếu đồng ý không hợp lệ trong công ty này.");
+  }
+  return record;
+}
+
+export async function assertSameCompanyClinicalPhoto(companyId: string, photoId: string) {
+  const record = await db.clinicalPhoto.findUnique({ where: { id: photoId } });
+  if (!record || record.companyId !== companyId) {
+    throw new AuthorizationError("Ảnh lâm sàng không hợp lệ trong công ty này.");
+  }
+  return record;
+}
+
+export async function assertSameCompanyMedicalFollowUp(companyId: string, followUpId: string) {
+  const record = await db.medicalFollowUp.findUnique({ where: { id: followUpId } });
+  if (!record || record.companyId !== companyId) {
+    throw new AuthorizationError("Lịch theo dõi không hợp lệ trong công ty này.");
+  }
+  return record;
+}

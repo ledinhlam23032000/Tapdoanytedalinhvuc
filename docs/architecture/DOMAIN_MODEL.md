@@ -1,5 +1,20 @@
 # Domain Model (Phần 2)
 
+## Cập nhật Phần 7 — Healthcare Vertical đã implement thật
+
+Mục "Healthcare Vertical (extension, không phải core)" bên dưới là conceptual
+draft Phần 2 — đã implement với các delta cụ thể: tên entity chốt lại theo
+khảo cổ thật (`CaseRecord` legacy KHÔNG map 1-1 sang `MedicalCase` vì nó là
+god-model gộp 5 trách nhiệm — phần tiền → `Sale`/`Payment`, phần hoa hồng →
+`CommissionCalculation`, phần khoá bản ghi → `ApprovalRequest`+audit, chỉ
+phần lâm sàng còn lại mới thành `MedicalCase`); thêm
+`HealthcareAppointmentContext` (không có trong draft, sinh ra từ ràng buộc
+chiều phụ thuộc ADR-036); thêm `ClinicalConsultationAddendum` +
+`ClinicalScreeningItem` (draft không tách); thêm `CompanyModule` +
+`CompanyMembershipPack` — hai thứ thuộc Platform chứ không thuộc Healthcare,
+nhưng Phần 7 là nơi đầu tiên thực sự cần chúng. Chi tiết:
+`docs/domain/HEALTHCARE.md`.
+
 ## Cập nhật Phần 6 — Finance/Payroll/Commission/Inventory đã implement thật
 
 Mục "Generic Business Domains" bên dưới liệt kê `LedgerEntry`/`PayrollRun`

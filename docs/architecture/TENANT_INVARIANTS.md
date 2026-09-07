@@ -141,6 +141,26 @@ thành công cho `recordPayment`/`finalizePayrollRun`/`issueStock` — bằng
 chứng thật rằng khoá `SELECT...FOR UPDATE` hoạt động, không chỉ review logic
 tĩnh.
 
+## Cập nhật Phần 7 — mở rộng sang Healthcare Vertical
+
+Toàn bộ nguyên tắc nền 1-5 áp dụng nguyên vẹn cho 12 entity Healthcare.
+Acceptance test: `src/lib/__tests__/tenant-isolation-part7.itest.ts`.
+
+Điểm khác mọi Phần trước: Phần 7 có **hai cổng độc lập** phải cùng vượt qua —
+permission VÀ module enablement. Test phải chứng minh cả hai chiều: có quyền
+`healthcare.*` nhưng Company chưa bật module → từ chối (bất biến #59/#87);
+bật module nhưng không có quyền → từ chối.
+
+Ranh giới riêng của Phần 7, phải test tường minh:
+- `MedicalCase.companyId` PHẢI bằng `Customer.companyId` — không tồn tại Case
+  gắn Customer khác Company (#53).
+- Founder/Ecosystem-tier KHÔNG tự động đọc được PHI — phải có
+  `CompanyMembership` tường minh trên đúng Company đó (#54/#81/#177).
+- Ảnh lâm sàng: biết `fileId` KHÔNG đủ để tải — mọi truy cập qua permission
+  check server-side (#92/#127/#191).
+- Permission pack chỉ gắn được cho người đã có `CompanyMembership` ACTIVE, và
+  thu hồi membership vô hiệu hoá pack ngay (#58/#99).
+
 ## Không lặp lại (đối chiếu trực tiếp bằng chứng từ Legacy Capability Matrix)
 
 - `v2-access.ts`: `user.role === "ADMIN"` bypass toàn bộ `ZProjectMember`

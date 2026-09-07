@@ -80,6 +80,25 @@ toàn bằng CRUD thật).
 | `Material`/`StockMovement`/`ServiceMaterial` (legacy) | `InventoryItem`/`InventoryLocation`/`StockMovement` | KEEP CONCEPT (tên `StockMovement`) + REWRITE physical | Chỉ giữ triết lý "nguồn sự thật là movement, không phải cột số dư" — schema/type/idempotency viết mới hoàn toàn, không copy field. |
 | `ZMechanismDefinition`/`ZMechanismVersion` (rule engine chiết khấu/hoa hồng) | — (không port, đã DEFER từ Phần 5) | KHÔNG SALVAGE | Xác nhận lại ở Phần 6: DRAFT-only, chưa từng chạy production thật (ADR-021 Phần 5 vẫn đúng cho cả Commission Phần 6). |
 
+## Cập nhật Phần 7 — Legacy Capability Matrix rows
+
+Nguồn: `docs/legacy/PART7_MODEL_CLASSIFICATION.md` — 12 model đã xác minh
+bằng cách đọc định nghĩa thật (mục VI: "không classification → không migrate").
+
+| Legacy | Target entity | Salvage decision | Ghi chú |
+|---|---|---|---|
+| `CaseRecord` (597) | **TÁCH 5 chiều**, không map 1-1 | REWRITE | God-model gộp đơn hàng + hồ sơ lâm sàng + phễu bán + hoa hồng CTV + khoá bản ghi. Tiền → `Sale`/`Payment`; hoa hồng → `CommissionCalculation`; khoá → `ApprovalRequest`+audit; phần lâm sàng → `MedicalCase`. |
+| `ConsultationRecord` (1154) | `ClinicalConsultation` + `ClinicalScreeningItem` | ADAPT | Cột `screening` Json không schema, đang chứa ≥2 thế hệ dữ liệu → chuẩn hoá thành bảng con. |
+| `CaseService` (646) | `SaleLine` (đã có) + `Procedure` | MERGE + REWRITE | SALE ≠ PROCEDURE (mục XXXV-XXXVI). Cờ `bomApplied` là idempotency tự chế → thay bằng `(sourceType, sourceId)` do server sinh. |
+| `Service` (525) | `CatalogItem` (đã có) | MERGE | 7 trường map thẳng. |
+| `CaseConsent` (940) + `ConsentTemplate` (928) | `ConsentRecord` + `ConsentTemplate` | ADAPT + bổ sung | Legacy KHÔNG có cách ghi nhận rút đồng ý — chỉ xoá bản ghi. Target thêm `REVOKED` tường minh. |
+| `Photo` (704) | `ClinicalPhoto` | REWRITE | Legacy lưu path trần `/media/<tệp>`, không checksum/sizeBytes, xoá bản ghi không xoá tệp. |
+| `MaterialUsage` (687) | `ProcedureMaterialUsage` + `StockMovement` (đã có) | MERGE | Legacy ghi ĐÔI usage + movement trong cùng transaction. |
+| `FollowUp` (719) | `Appointment` (đã có) + `MedicalFollowUp` | MERGE + tách | `FollowUp` tồn tại CHỈ VÌ `Appointment` legacy bị khoá 1-1 với case. |
+| `CaseDocument` (978), `CollaboratorDocument`, `StaffAgreement.fileUrl` | — (defer) | DEFER | 3 hình dạng lưu tệp song song cùng semantics → gom thành `Attachment` đa hình, nhưng CHƯA làm ở Phần 7. |
+| `CaseRevenueAllocation` (1031) | `CommissionCalculation` (đã có) | MERGE | Thuộc tầng generic, không phải vertical. |
+| `DebtPlan` (962) | — (chưa có target) | DEFER | Lịch trả góp/hẹn nợ — khoảng trống thật của Phần 3-6, ghi nhận để Phần sau xử lý. |
+
 ## Legacy Role Map (bổ sung Phần 3 — mục CIII-CVII)
 
 Legacy `Role` enum (10 giá trị, global trên `User`) KHÔNG map 1:1 vào

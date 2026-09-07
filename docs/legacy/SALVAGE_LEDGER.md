@@ -63,6 +63,29 @@ qua archaeology, chỉ có 1 field `firstApprovedByUserId` tường minh thay v�
 công thức cũ, thiết kế lại từ đầu với `allocationBps` + validate tổng
 ≤10000 (ADR-030, chi tiết `docs/domain/COMMISSION.md`).
 
+## Cập nhật Phần 7
+
+Pattern đáng salvage đã áp dụng: **"snapshot nội dung tại thời điểm ký"** —
+xuất hiện độc lập ở HAI chỗ trong legacy (`CaseConsent.title+body` dòng
+946-947 có comment 'snapshot', và `StaffAgreement.contentSnapshot` dòng 1196),
+đủ bằng chứng để chuẩn hoá thành một khuôn chung ở `ConsentRecord` (ADR-042).
+
+**Bài học phải trả giá, KHÔNG lặp lại** (đều đã verify bằng đọc code thật):
+- `onDelete: Cascade` trên chứng từ pháp lý — `CaseConsent`(943),
+  `CaseDocument`(981), `StaffAgreement`(1191). Target: 0 `ON DELETE CASCADE`.
+- Toàn vẹn tiền phụ thuộc HOÀN TOÀN vào một hàm ứng dụng (`recalc()`,
+  `ho-so/actions.ts:59-70`), DB không ràng buộc gì. Target: không lưu tổng
+  (ADR-050).
+- Ghi đè `createdById` mỗi lần update (`ho-so/actions.ts:178-189`) → trường
+  tác giả mang ý nghĩa sai trong dữ liệu thật.
+- Idempotency tự chế bằng cờ boolean (`CaseService.bomApplied`) mà vẫn ghi
+  đôi. Target: key do server sinh + no-op khi gọi lại (ADR-043).
+- Quản trị mẫu phiếu **đang đứt**: `mau-phieu/page.tsx:17` gọi
+  `requireCap("mod:mau-phieu")` nhưng module đã bị gỡ khỏi `permissions.ts` →
+  `ConsentTemplate` dùng được nhưng không quản trị được.
+- `BAN-GIAO.md` mục 13.7 nói "không xoá `ConsentRecord`" nhưng model thật tên
+  là `CaseConsent` — **không dùng tài liệu legacy làm nguồn tên entity**.
+
 ## Tuyệt đối KHÔNG copy (secrets — chỉ ghi path, không mở/không quote nội dung)
 
 Xác nhận có tồn tại trong `ZenithTasks` (path only, chưa từng mở):

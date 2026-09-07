@@ -69,6 +69,26 @@ tiếp qua Company (Location chỉ là 1 field trên StockMovement, không phả
 parent ownership). Chi tiết: `docs/domain/FINANCE.md`, `PAYROLL.md`,
 `COMMISSION.md`, `INVENTORY.md`.
 
+## Cập nhật Phần 7
+
+Dòng Healthcare ở bảng trên (`MedicalCase`/`Consultation`/`Procedure`/
+`Consent`/`ClinicalPhoto`/`MedicalFollowUp`) đã implement đúng owner scope
+đã ghi (Company-owned, sensitivity **Rất cao**, audit **bắt buộc**) với delta:
+attribution optional là `OrganizationUnit` (KHÔNG phải `Project` — bất biến
+#143: `MedicalCase` không bao giờ scope theo Project); `Appointment` liên
+kết qua `HealthcareAppointmentContext` chứ không phải FK trực tiếp.
+
+Archive behavior của Healthcare **chặt hơn** mọi domain trước: xoá không bao
+giờ lan truyền vào lịch sử lâm sàng (`ON DELETE RESTRICT`, đã verify 0
+`ON DELETE CASCADE` trong migration SQL), và hard delete bản ghi lâm sàng đã
+finalize luôn bị từ chối. Đây là phản ứng trực tiếp với phát hiện khảo cổ:
+legacy để CẢ 3 loại chứng từ pháp lý (`CaseConsent`, `CaseDocument`,
+`StaffAgreement`) `onDelete: Cascade`.
+
+Hai entity Platform mới: `CompanyModule` (Company-owned, bật/tắt phân hệ) và
+`CompanyMembershipPack` (owned qua `CompanyMembership`, sensitivity **Cao**
+vì là quyền, audit bắt buộc).
+
 ## Ghi chú UNKNOWN (không có ở core entity quan trọng — quality gate CXXX)
 
 Không có UNKNOWN ở core entity (Ecosystem/Company/Membership/Organization/

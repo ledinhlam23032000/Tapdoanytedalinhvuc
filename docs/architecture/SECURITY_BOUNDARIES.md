@@ -145,6 +145,30 @@ sửa trước khi review, không phải do review tìm ra. Chi tiết:
 `docs/domain/PAYROLL.md`, `INVENTORY.md`, ADR-028/029
 (`docs/architecture/DECISIONS.md`).
 
+## Cập nhật Phần 7 — Healthcare permission + permission pack
+
+Thêm 18 permission key `healthcare.*` (78 tổng). `RESERVED_PERMISSION_PREFIXES`
+giờ **rỗng** — `"healthcare."` là prefix cuối cùng và đã thành permission
+thật. Lưu ý đã xác minh: hằng số đó không được dùng ở bất kỳ đâu (marker khai
+báo-thuần đúng chủ đích mục CCXXVI) nên nó **không chặn gì lúc runtime**.
+
+Ranh giới mới quan trọng nhất của Phần 7: **quyền không còn chỉ đến từ
+`rolePreset`**. Trước Phần 7, `resolveCompanyPermissions` chỉ đọc 5 preset
+generic — không diễn đạt nổi 3 bất biến có test cụ thể (pack reception không
+đọc nội dung khám #50; pack nurse không có finance/payroll #51; pack doctor
+không có quyền quản trị Company #52). ADR-051 thêm `CompanyMembershipPack`:
+quyền = `rolePreset` + pack, pack chỉ CỘNG THÊM. Pack là **tên gọi của một
+tập permission key trong code**, không phải điều kiện so sánh tên role — giữ
+nguyên bất biến #131/#179 (không suy quyền từ tên Position/title).
+
+Ranh giới thứ hai: **module enablement là cổng độc lập với permission**. Mọi
+domain service healthcare gọi `assertHealthcareModuleEnabled(companyId)` ngay
+sau `requireCompanyContextForActor` — có quyền mà Company chưa bật phân hệ
+thì vẫn bị từ chối.
+
+Ranh giới thứ ba: `healthcare.*` **không bao giờ** implicit-grant
+`finance.*`/`payroll.*` (#49) — có unit test âm tính riêng cho từng pack.
+
 ## Red-team review
 
 Xem `docs/architecture/RED_TEAM_REVIEW.md` — kết quả review đối kháng thiết
