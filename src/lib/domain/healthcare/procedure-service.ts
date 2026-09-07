@@ -438,9 +438,19 @@ export async function getProcedureList(actorId: string, companyId: string, medic
   await assertHealthcareModuleEnabled(company.id);
   if (medicalCaseId) await assertSameCompanyMedicalCase(company.id, medicalCaseId);
 
+  // Bao gồm materialUsages: trang chi tiết Case cần hiển thị đầy đủ danh
+  // sách vật tư đã dùng ngay trong danh sách Procedure, không N+1 sang detail.
   return db.procedure.findMany({
     where: { companyId: company.id, medicalCaseId },
-    include: { primaryClinician: { omit: { passwordHash: true } }, catalogItem: true },
+    include: {
+      primaryClinician: { omit: { passwordHash: true } },
+      completedBy: { omit: { passwordHash: true } },
+      catalogItem: true,
+      materialUsages: {
+        include: { inventoryItem: true, inventoryLocation: true },
+        orderBy: { recordedAt: "asc" },
+      },
+    },
     orderBy: [{ scheduledAt: "desc" }, { createdAt: "desc" }],
     take: 200,
   });

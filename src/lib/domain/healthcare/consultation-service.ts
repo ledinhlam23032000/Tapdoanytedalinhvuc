@@ -290,9 +290,20 @@ export async function getConsultationList(actorId: string, companyId: string, me
   await assertHealthcareModuleEnabled(company.id);
   await assertSameCompanyMedicalCase(company.id, medicalCaseId);
 
+  // Bao gồm addenda + screeningItems cùng lúc: trang chi tiết Case cần hiển
+  // thị đầy đủ ngay trong danh sách (không có nhu cầu N+1 sang detail cho
+  // từng phiếu), và số lượng phiếu/1 case luôn nhỏ.
   return db.clinicalConsultation.findMany({
     where: { companyId: company.id, medicalCaseId },
-    include: { clinician: { omit: { passwordHash: true } } },
+    include: {
+      clinician: { omit: { passwordHash: true } },
+      finalizedBy: { omit: { passwordHash: true } },
+      addenda: {
+        include: { author: { omit: { passwordHash: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      screeningItems: { orderBy: { itemKey: "asc" } },
+    },
     orderBy: { createdAt: "desc" },
   });
 }
