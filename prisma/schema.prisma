@@ -89,6 +89,7 @@ model User {
   clinicalPhotosUploaded     ClinicalPhoto[]                @relation("ClinicalPhotoUploadedBy")
   clinicalPhotosArchived     ClinicalPhoto[]                @relation("ClinicalPhotoArchivedBy")
   medicalFollowUpsCreated    MedicalFollowUp[]              @relation("MedicalFollowUpCreatedBy")
+  membershipPacksGranted     CompanyMembershipPack[]        @relation("MembershipPackGrantedBy")
 }
 
 // ===== Ecosystem =====
@@ -239,6 +240,8 @@ model CompanyMembership {
   company Company @relation(fields: [companyId], references: [id])
   user    User    @relation(fields: [userId], references: [id])
 
+  // Phần 7 — ADR-051
+  permissionPacks CompanyMembershipPack[]
   @@unique([companyId, userId])
   @@index([userId])
   @@index([companyId])
@@ -1649,4 +1652,33 @@ model MedicalFollowUp {
 
   @@index([companyId, medicalCaseId])
   @@index([companyId, status, scheduledFor])
+}
+
+// ADR-051 — permission pack gan theo TUNG CompanyMembership.
+// Vi sao can: truoc Phan 7 quyen CHI den tu rolePreset (5 gia tri generic),
+// nen khong dien dat duoc 3 bat bien co test cu the cua spec: pack reception
+// KHONG chua healthcare.consultation.view (#50), pack nurse KHONG chua
+// finance/payroll (#51), pack doctor KHONG chua quyen quan tri Company (#52).
+// Pack la TEN goi cua mot tap permission dinh nghia trong code (presets.ts) —
+// quyen van chi den tu permission key tuong minh, khong suy tu ten role hay
+// ten Position (bat bien #131/#179).
+enum PermissionPack {
+  HEALTHCARE_RECEPTION
+  HEALTHCARE_NURSE
+  HEALTHCARE_DOCTOR
+  HEALTHCARE_CARE
+}
+
+model CompanyMembershipPack {
+  id              String         @id @default(cuid())
+  membershipId    String
+  pack            PermissionPack
+  grantedByUserId String
+  grantedAt       DateTime       @default(now())
+
+  membership CompanyMembership @relation(fields: [membershipId], references: [id])
+  grantedBy  User              @relation("MembershipPackGrantedBy", fields: [grantedByUserId], references: [id])
+
+  @@unique([membershipId, pack])
+  @@index([membershipId])
 }

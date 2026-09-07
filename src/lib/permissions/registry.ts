@@ -83,6 +83,26 @@ export const COMPANY_PERMISSIONS = [
   "inventory.transfer",
   "inventory.adjust",
   "inventory.manage",
+  // Phần 7 — Healthcare Vertical (ADR-046). Không bao giờ implicit-grant
+  // finance.*/payroll.* (bất biến #49).
+  "healthcare.module.manage",
+  "healthcare.case.view",
+  "healthcare.case.create",
+  "healthcare.case.update",
+  "healthcare.case.close",
+  "healthcare.consultation.view",
+  "healthcare.consultation.create",
+  "healthcare.consultation.finalize",
+  "healthcare.procedure.view",
+  "healthcare.procedure.plan",
+  "healthcare.procedure.perform",
+  "healthcare.consent.view",
+  "healthcare.consent.manage",
+  "healthcare.photo.view",
+  "healthcare.photo.manage",
+  "healthcare.followup.view",
+  "healthcare.followup.manage",
+  "healthcare.template.manage",
 ] as const;
 
 export type EcosystemPermission = (typeof ECOSYSTEM_PERMISSIONS)[number];
@@ -102,4 +122,8 @@ export function canGrantOwnerRole(actorRolePreset: string | undefined): boolean 
 // CCXXVI). "work." (Phần 4), "customer."/"lead."/"appointment."/"sales."/
 // "catalog." (Phần 5), "finance."/"payroll."/"commission."/"inventory."
 // (Phần 6) đã chuyển sang COMPANY_PERMISSIONS thật — bỏ khỏi reserved.
-export const RESERVED_PERMISSION_PREFIXES = ["healthcare."] as const;
+// Phần 7 đã chuyển "healthcare." sang COMPANY_PERMISSIONS thật -> danh sách
+// reserved giờ RỖNG. Lưu ý đã xác minh: hằng số này không được dùng ở bất kỳ
+// đâu (marker khai báo-thuần, đúng chủ đích của mục CCXXVI) — nó KHÔNG chặn
+// gì lúc runtime, đừng trông chờ nó bảo vệ.
+export const RESERVED_PERMISSION_PREFIXES = [] as const;

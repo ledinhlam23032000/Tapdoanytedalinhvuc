@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { ECOSYSTEM_ROLE_PERMISSIONS, COMPANY_ROLE_PERMISSIONS } from "@/lib/permissions/presets";
+import { ECOSYSTEM_ROLE_PERMISSIONS, COMPANY_ROLE_PERMISSIONS, PERMISSION_PACKS } from "@/lib/permissions/presets";
 import type { EcosystemPermission, CompanyPermission } from "@/lib/permissions/registry";
 
 // Authorization resolver — nguồn canonical DUY NHẤT để hỏi "actor này được
@@ -28,9 +28,19 @@ export async function resolveCompanyPermissions(
 ): Promise<Set<CompanyPermission>> {
   const membership = await db.companyMembership.findUnique({
     where: { companyId_userId: { companyId, userId } },
+    include: { permissionPacks: true },
   });
   if (!membership || membership.status !== "ACTIVE") return new Set();
-  return new Set(COMPANY_ROLE_PERMISSIONS[membership.rolePreset]);
+  // Quyền = rolePreset + các PERMISSION PACK gắn theo từng membership
+  // (ADR-051). Pack chỉ CỘNG THÊM, không bao giờ bớt — và chỉ chứa permission
+  // key tường minh, không suy từ tên role/Position (bất biến #131/#179).
+  // Membership không ACTIVE thì pack cũng vô hiệu (đã return ở trên) —
+  // bất biến #99: thu hồi membership có hiệu lực ngay.
+  const permissions = new Set<CompanyPermission>(COMPANY_ROLE_PERMISSIONS[membership.rolePreset]);
+  for (const granted of membership.permissionPacks) {
+    for (const p of PERMISSION_PACKS[granted.pack]) permissions.add(p);
+  }
+  return permissions;
 }
 
 export async function hasEcosystemPermission(

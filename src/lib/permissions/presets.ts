@@ -1,4 +1,4 @@
-import type { EcosystemRolePreset, CompanyRolePreset } from "@/generated/prisma";
+import type { EcosystemRolePreset, CompanyRolePreset, PermissionPack } from "@/generated/prisma";
 import type { EcosystemPermission, CompanyPermission } from "@/lib/permissions/registry";
 
 // Role preset = named permission package (Master Prompt mục XVI/XXV/XXXIV).
@@ -220,6 +220,73 @@ const MEMBER_PART6: CompanyPermission[] = [
 
 const VIEWER_PART6: CompanyPermission[] = ["finance.view", "inventory.view"];
 
+
+// ===== Phần 7 — Healthcare Vertical =====
+// Preset role generic CHỈ mở phần quản trị module + xem. Mọi quyền lâm sàng
+// thật (create/finalize/perform/consent/photo) đến từ PERMISSION PACK gắn
+// theo từng CompanyMembership (ADR-051) — không phải từ rolePreset, vì
+// "bác sĩ" không phải một tier quản lý.
+const OWNER_ADMIN_PART7: CompanyPermission[] = [
+  "healthcare.module.manage",
+  "healthcare.case.view",
+  "healthcare.template.manage",
+];
+
+const MANAGER_PART7: CompanyPermission[] = ["healthcare.case.view"];
+
+// MEMBER/VIEWER KHÔNG mặc định thấy dữ liệu lâm sàng — cùng lý do payroll ở
+// Phần 6, và bất biến #200: "Reception không được đọc toàn bộ clinical note
+// chỉ vì tên role".
+const MEMBER_PART7: CompanyPermission[] = [];
+const VIEWER_PART7: CompanyPermission[] = [];
+
+/** Pack theo vai trò chuyên môn (ADR-051). Gắn vào CompanyMembership, cộng
+ *  dồn với quyền của rolePreset. Ràng buộc âm tính có test riêng:
+ *   - RECEPTION KHÔNG có healthcare.consultation.view (#50)
+ *   - NURSE KHÔNG có bất kỳ finance / payroll nào (#51)
+ *   - DOCTOR KHÔNG có company.manage / company.members.manage (#52) */
+export const PERMISSION_PACKS: Record<PermissionPack, CompanyPermission[]> = {
+  HEALTHCARE_RECEPTION: [
+    "healthcare.case.view",
+    "healthcare.case.create",
+    "healthcare.followup.view",
+  ],
+  HEALTHCARE_NURSE: [
+    "healthcare.case.view",
+    "healthcare.consultation.view",
+    "healthcare.procedure.view",
+    "healthcare.procedure.plan",
+    "healthcare.consent.view",
+    "healthcare.photo.view",
+    "healthcare.photo.manage",
+    "healthcare.followup.view",
+    "healthcare.followup.manage",
+  ],
+  HEALTHCARE_DOCTOR: [
+    "healthcare.case.view",
+    "healthcare.case.create",
+    "healthcare.case.update",
+    "healthcare.case.close",
+    "healthcare.consultation.view",
+    "healthcare.consultation.create",
+    "healthcare.consultation.finalize",
+    "healthcare.procedure.view",
+    "healthcare.procedure.plan",
+    "healthcare.procedure.perform",
+    "healthcare.consent.view",
+    "healthcare.consent.manage",
+    "healthcare.photo.view",
+    "healthcare.photo.manage",
+    "healthcare.followup.view",
+    "healthcare.followup.manage",
+  ],
+  HEALTHCARE_CARE: [
+    "healthcare.case.view",
+    "healthcare.followup.view",
+    "healthcare.followup.manage",
+  ],
+};
+
 export const COMPANY_ROLE_PERMISSIONS: Record<CompanyRolePreset, CompanyPermission[]> = {
   OWNER: [
     "company.view",
@@ -229,6 +296,7 @@ export const COMPANY_ROLE_PERMISSIONS: Record<CompanyRolePreset, CompanyPermissi
     ...OWNER_ADMIN_PART4,
     ...OWNER_ADMIN_PART5,
     ...OWNER_ADMIN_PART6,
+    ...OWNER_ADMIN_PART7,
   ],
   COMPANY_ADMIN: [
     "company.view",
@@ -238,6 +306,7 @@ export const COMPANY_ROLE_PERMISSIONS: Record<CompanyRolePreset, CompanyPermissi
     ...OWNER_ADMIN_PART4,
     ...OWNER_ADMIN_PART5,
     ...OWNER_ADMIN_PART6,
+    ...OWNER_ADMIN_PART7,
   ],
   MANAGER: [
     "company.view",
@@ -245,7 +314,8 @@ export const COMPANY_ROLE_PERMISSIONS: Record<CompanyRolePreset, CompanyPermissi
     ...MANAGER_PART4,
     ...MANAGER_PART5,
     ...MANAGER_PART6,
+    ...MANAGER_PART7,
   ],
-  MEMBER: ["company.view", ...MEMBER_PART4, ...MEMBER_PART5, ...MEMBER_PART6],
-  VIEWER: ["company.view", ...VIEWER_PART4, ...VIEWER_PART5, ...VIEWER_PART6],
+  MEMBER: ["company.view", ...MEMBER_PART4, ...MEMBER_PART5, ...MEMBER_PART6, ...MEMBER_PART7],
+  VIEWER: ["company.view", ...VIEWER_PART4, ...VIEWER_PART5, ...VIEWER_PART6, ...VIEWER_PART7],
 };

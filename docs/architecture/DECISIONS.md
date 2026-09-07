@@ -1097,3 +1097,39 @@ derived thay vì lưu.
 `CaseRecord` và `Appointment` (`caseId @unique`) rồi phải đẻ ra `FollowUp` để
 lách — Phần 7 không lặp lại: mọi quan hệ Case↔Sale↔Procedure↔Appointment đều
 để mở đúng cardinality nghiệp vụ thật.
+
+## ADR-051 — Permission pack gắn theo từng `CompanyMembership`; vai trò chuyên môn KHÔNG phải role preset
+
+**Quyết định:** Thêm bảng `CompanyMembershipPack` (membership → `PermissionPack`
+enum) và `PERMISSION_PACKS` trong `presets.ts`. Quyền hiệu lực của một người
+trong một Company = quyền của `rolePreset` **cộng** quyền của các pack được
+gắn. Pack chỉ CỘNG THÊM, không bao giờ bớt. 4 pack Phần 7:
+`HEALTHCARE_RECEPTION`, `HEALTHCARE_NURSE`, `HEALTHCARE_DOCTOR`,
+`HEALTHCARE_CARE`. Preset role generic (OWNER/ADMIN/MANAGER) chỉ mở phần
+quản trị module + `healthcare.case.view`; MEMBER/VIEWER không có quyền lâm
+sàng nào.
+
+**Vì sao:** Trước Phần 7, `resolveCompanyPermissions` lấy quyền **chỉ** từ
+`membership.rolePreset` — 5 giá trị generic (OWNER/COMPANY_ADMIN/MANAGER/
+MEMBER/VIEWER). Với đúng 5 preset đó thì **không diễn đạt được** 3 bất biến
+có test cụ thể của spec: pack reception KHÔNG chứa
+`healthcare.consultation.view` (#50), pack nurse KHÔNG chứa bất kỳ
+`finance.`/`payroll.` nào (#51), pack doctor KHÔNG chứa quyền quản trị
+Company (#52). "Bác sĩ" không phải một tier quản lý — một bác sĩ có thể là
+MEMBER về mặt tổ chức nhưng cần quyền lâm sàng mà MEMBER thường không được
+có, và ngược lại một MANAGER hành chính không được tự động đọc bệnh án.
+
+Cách này giữ nguyên bất biến #131/#179: quyền vẫn chỉ đến từ **permission
+key tường minh**; pack chỉ là TÊN GỌI của một tập key định nghĩa trong code,
+không phải điều kiện so sánh tên role (`role === "DOCTOR"`) trong nhánh code.
+Và giữ #99: membership không ACTIVE thì resolver trả về set rỗng trước khi
+đọc pack — thu hồi membership vô hiệu hoá pack ngay lập tức.
+
+**Hệ quả:** 6 unit test ràng buộc **âm tính** trong
+`src/lib/permissions/__tests__/presets.test.ts` — loại bất biến "KHÔNG được
+chứa X" rất dễ trôi khi ai đó tiện tay thêm quyền vào pack, và không test nào
+khác bắt được. Có thêm test "mọi permission trong pack đều là key hợp lệ
+trong registry" để pack không thể chứa key chết.
+
+Phần 8+ nếu cần vai trò chuyên môn khác (AI operator, kế toán trưởng...) thì
+thêm pack mới, KHÔNG thêm giá trị vào `CompanyRolePreset`.
