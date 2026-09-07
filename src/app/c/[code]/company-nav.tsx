@@ -15,6 +15,7 @@ export function CompanyNav({
   canViewFinance,
   canViewPayroll,
   canViewInventory,
+  canViewHealthcare,
 }: {
   code: string;
   canManageMembers: boolean;
@@ -27,6 +28,7 @@ export function CompanyNav({
   canViewFinance: boolean;
   canViewPayroll: boolean;
   canViewInventory: boolean;
+  canViewHealthcare: boolean;
 }) {
   const pathname = usePathname();
   // mục CXCVII: giữ "navigation budget" — Lead gộp vào trang Khách hàng
@@ -42,6 +44,7 @@ export function CompanyNav({
     ...(canViewFinance ? [{ href: `/c/${code}/finance`, label: "Tài chính" }] : []),
     ...(canViewPayroll ? [{ href: `/c/${code}/payroll`, label: "Lương" }] : []),
     ...(canViewInventory ? [{ href: `/c/${code}/inventory`, label: "Tồn kho" }] : []),
+    ...(canViewHealthcare ? [{ href: `/c/${code}/healthcare`, label: "Y tế" }] : []),
     ...(canViewWork ? [{ href: `/c/${code}/work`, label: "Công việc" }] : []),
     ...(canViewProjects ? [{ href: `/c/${code}/projects`, label: "Dự án" }] : []),
     ...(canViewOrganization ? [{ href: `/c/${code}/organization`, label: "Cơ cấu tổ chức" }] : []),

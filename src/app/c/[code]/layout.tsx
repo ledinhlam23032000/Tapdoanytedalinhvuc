@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireCompanyPageByCode } from "@/lib/authorization/company-context";
 import { logoutAction } from "@/lib/actions/auth-actions";
 import { CompanyNav } from "./company-nav";
+import { isHealthcareModuleEnabled } from "@/lib/domain/healthcare/module-service";
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Nháp",
@@ -19,6 +20,8 @@ export default async function CompanyLayout({
 }) {
   const { code } = await params;
   const ctx = await requireCompanyPageByCode(code, "company.view");
+  // Cong THU HAI doc lap voi permission (ADR-047) — nav chi hien khi CA HAI dieu kien dung.
+  const healthcareModuleEnabled = await isHealthcareModuleEnabled(ctx.company.id);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
@@ -50,6 +53,7 @@ export default async function CompanyLayout({
         canViewFinance={ctx.permissions.has("finance.view")}
         canViewPayroll={ctx.permissions.has("payroll.view")}
         canViewInventory={ctx.permissions.has("inventory.view")}
+        canViewHealthcare={healthcareModuleEnabled && ctx.permissions.has("healthcare.case.view")}
       />
       {children}
     </div>

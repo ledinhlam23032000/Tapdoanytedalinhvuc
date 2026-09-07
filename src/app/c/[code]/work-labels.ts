@@ -175,3 +175,72 @@ export function formatDateTime(iso: string | null): string | null {
 export function formatMoney(amount: number | string): string {
   return new Intl.NumberFormat("vi-VN").format(Number(amount)) + " ₫";
 }
+
+// ===== Phần 7 — Healthcare Vertical =====
+
+export const MEDICAL_CASE_STATUS_LABEL: Record<string, string> = {
+  OPEN: "Mới mở",
+  IN_TREATMENT: "Đang điều trị",
+  FOLLOW_UP: "Đang theo dõi",
+  CLOSED: "Đã đóng",
+  CANCELLED: "Đã huỷ",
+};
+
+export const MEDICAL_CASE_TYPE_LABEL: Record<string, string> = {
+  CONSULTATION: "Tư vấn",
+  TREATMENT: "Điều trị",
+  AESTHETIC_PROCEDURE: "Thẩm mỹ",
+  FOLLOW_UP: "Tái khám",
+  OTHER: "Khác",
+};
+
+export const CLINICAL_RECORD_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Nháp",
+  FINAL: "Đã chốt",
+};
+
+export const PROCEDURE_STATUS_LABEL: Record<string, string> = {
+  PLANNED: "Đã lên lịch",
+  READY: "Sẵn sàng",
+  IN_PROGRESS: "Đang thực hiện",
+  COMPLETED: "Đã hoàn tất",
+  CANCELLED: "Đã huỷ",
+};
+
+export const CONSENT_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Nháp",
+  SIGNED: "Đã ký",
+  REVOKED: "Đã rút lại",
+  EXPIRED: "Hết hạn",
+};
+
+export const CONSENT_TYPE_LABEL: Record<string, string> = {
+  PROCEDURE: "Đồng ý thủ thuật",
+  ANESTHESIA: "Đồng ý gây tê/mê",
+  PHOTO_USAGE: "Đồng ý dùng hình ảnh",
+  DATA_PROCESSING: "Đồng ý xử lý dữ liệu",
+  OTHER: "Khác",
+};
+
+export const CLINICAL_PHOTO_TYPE_LABEL: Record<string, string> = {
+  BEFORE: "Trước",
+  AFTER: "Sau",
+  PROGRESS: "Tiến triển",
+  CLINICAL_FINDING: "Phát hiện lâm sàng",
+  OTHER: "Khác",
+};
+
+export const MEDICAL_FOLLOWUP_STATUS_LABEL: Record<string, string> = {
+  PLANNED: "Đã lên lịch",
+  DUE: "Đến hạn",
+  DONE: "Hoàn tất",
+  MISSED: "Bỏ lỡ",
+  CANCELLED: "Đã huỷ",
+};
+
+/** answer NULLABLE — "Chưa ghi nhận" KHÁC "Không" (ADR-048). Không bao giờ
+ *  gộp null vào nhánh NO khi hiển thị. */
+export function screeningAnswerLabel(answer: "YES" | "NO" | null): string {
+  if (answer === null) return "Chưa ghi nhận";
+  return answer === "YES" ? "Có" : "Không";
+}
