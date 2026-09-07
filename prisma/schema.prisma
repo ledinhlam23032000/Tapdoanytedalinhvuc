@@ -71,6 +71,24 @@ model User {
   commissionRulesCreated        CommissionRule[]        @relation("CommissionRuleCreatedBy")
   commissionCalculations        CommissionCalculation[] @relation("CommissionCalculationUser")
   stockMovementsActed           StockMovement[]         @relation("StockMovementActor")
+
+  // Phần 7 — Healthcare Vertical
+  enabledCompanyModules      CompanyModule[]                @relation("CompanyModuleEnabledBy")
+  medicalCasesAsClinician    MedicalCase[]                  @relation("MedicalCasePrimaryClinician")
+  medicalCasesCreated        MedicalCase[]                  @relation("MedicalCaseCreatedBy")
+  consultationsAsClinician   ClinicalConsultation[]         @relation("ConsultationClinician")
+  consultationsFinalized     ClinicalConsultation[]         @relation("ConsultationFinalizedBy")
+  consultationAddenda        ClinicalConsultationAddendum[] @relation("ConsultationAddendumAuthor")
+  proceduresAsClinician      Procedure[]                    @relation("ProcedurePrimaryClinician")
+  proceduresCreated          Procedure[]                    @relation("ProcedureCreatedBy")
+  proceduresCompleted        Procedure[]                    @relation("ProcedureCompletedBy")
+  procedureMaterialsRecorded ProcedureMaterialUsage[]       @relation("ProcedureMaterialRecordedBy")
+  consentTemplatesCreated    ConsentTemplate[]              @relation("ConsentTemplateCreatedBy")
+  consentRecordsCreated      ConsentRecord[]                @relation("ConsentRecordCreatedBy")
+  consentRecordsRevoked      ConsentRecord[]                @relation("ConsentRecordRevokedBy")
+  clinicalPhotosUploaded     ClinicalPhoto[]                @relation("ClinicalPhotoUploadedBy")
+  clinicalPhotosArchived     ClinicalPhoto[]                @relation("ClinicalPhotoArchivedBy")
+  medicalFollowUpsCreated    MedicalFollowUp[]              @relation("MedicalFollowUpCreatedBy")
 }
 
 // ===== Ecosystem =====
@@ -184,6 +202,19 @@ model Company {
   inventoryLocations     InventoryLocation[]
   stockMovements         StockMovement[]
 
+  // Phần 7 — Healthcare Vertical
+  companyModules          CompanyModule[]
+  medicalCases            MedicalCase[]
+  healthcareApptContexts  HealthcareAppointmentContext[]
+  clinicalConsultations   ClinicalConsultation[]
+  consultationAddenda     ClinicalConsultationAddendum[]
+  clinicalScreeningItems  ClinicalScreeningItem[]
+  procedures              Procedure[]
+  procedureMaterialUsages ProcedureMaterialUsage[]
+  consentTemplates        ConsentTemplate[]
+  consentRecords          ConsentRecord[]
+  clinicalPhotos          ClinicalPhoto[]
+  medicalFollowUps        MedicalFollowUp[]
   @@unique([ecosystemId, code])
   @@index([ecosystemId])
 }
@@ -292,6 +323,9 @@ model OrganizationUnit {
   inventoryLocations InventoryLocation[]
   ledgerEntries      LedgerEntry[]
 
+  // Phần 7
+  medicalCases MedicalCase[]
+  procedures   Procedure[]
   @@index([companyId])
   @@index([parentId])
 }
@@ -385,6 +419,8 @@ model WorkItem {
   assignee         User?             @relation("WorkItemAssignee", fields: [assigneeUserId], references: [id])
   creator          User              @relation("WorkItemCreator", fields: [createdByUserId], references: [id])
 
+  // Phần 7
+  medicalFollowUps MedicalFollowUp[]
   @@index([companyId, status])
   @@index([assigneeUserId])
   @@index([projectId])
@@ -564,6 +600,9 @@ model Customer {
   workItems         WorkItem[]
   ledgerEntries     LedgerEntry[]
 
+  // Phần 7
+  medicalCases       MedicalCase[]
+  consentsSignedByMe ConsentRecord[] @relation("ConsentSignedByCustomer")
   @@unique([companyId, code])
   @@index([companyId, phoneHash])
   @@index([companyId, ownerUserId])
@@ -630,6 +669,8 @@ model Appointment {
   createdBy         User              @relation("AppointmentCreator", fields: [createdByUserId], references: [id])
   followUpWorkItems WorkItem[]
 
+  // Phần 7
+  healthcareContext HealthcareAppointmentContext?
   @@index([companyId, startAt])
   @@index([companyId, assignedUserId, startAt])
   @@index([companyId, customerId])
@@ -655,6 +696,8 @@ model CatalogItem {
   saleLines      SaleLine[]
   inventoryItems InventoryItem[]
 
+  // Phần 7
+  procedures Procedure[]
   @@unique([companyId, code])
   @@index([companyId, active])
 }
@@ -716,6 +759,8 @@ model SaleLine {
   sale        Sale         @relation(fields: [saleId], references: [id])
   catalogItem CatalogItem? @relation(fields: [catalogItemId], references: [id])
 
+  // Phần 7
+  procedures Procedure[]
   @@index([saleId])
 }
 
@@ -1103,6 +1148,8 @@ model InventoryLocation {
   organizationUnit OrganizationUnit? @relation(fields: [organizationUnitId], references: [id])
   movements        StockMovement[]
 
+  // Phần 7
+  procedureMaterialUsages ProcedureMaterialUsage[]
   @@index([companyId, status])
 }
 
@@ -1126,6 +1173,8 @@ model InventoryItem {
   catalogItem CatalogItem?    @relation(fields: [catalogItemId], references: [id])
   movements   StockMovement[]
 
+  // Phần 7
+  procedureMaterialUsages ProcedureMaterialUsage[]
   @@unique([companyId, sku])
   @@index([companyId, status])
 }
@@ -1143,6 +1192,7 @@ enum StockMovementType {
 }
 
 enum StockMovementSourceType {
+  PROCEDURE_MATERIAL_USAGE
   SALE
   MANUAL
   ADJUSTMENT
@@ -1172,7 +1222,431 @@ model StockMovement {
   location      InventoryLocation @relation(fields: [locationId], references: [id])
   actor         User              @relation("StockMovementActor", fields: [actorUserId], references: [id])
 
+  // Phần 7
+  procedureMaterialUsage ProcedureMaterialUsage?
   @@unique([companyId, idempotencyKey])
   @@index([companyId, inventoryItemId, locationId, occurredAt])
   @@index([companyId, sourceType, sourceId])
+}
+
+// ============================================================================
+// PHẦN 7 — HEALTHCARE / AESTHETICS VERTICAL
+// ----------------------------------------------------------------------------
+// Đọc trước khi sửa: docs/architecture/DECISIONS.md ADR-036 → ADR-050,
+// docs/legacy/PART7_MODEL_CLASSIFICATION.md (bằng chứng khảo cổ đã xác minh),
+// docs/legacy/PART7_SPEC_DIGEST.md (209 bất biến đánh số).
+//
+// Nguyên tắc xuyên suốt khối này:
+//  - companyId NOT NULL trên MỌI entity, scoping đọc thẳng từ đó, CẤM suy qua
+//    Customer (ADR-038). Legacy KHÔNG có tenant scoping ở bất kỳ model nào —
+//    cả 4 agent khảo cổ độc lập đều xác nhận.
+//  - KHÔNG onDelete: Cascade vào lịch sử lâm sàng (ADR-040). Legacy để
+//    CaseConsent/CaseDocument/StaffAgreement đều Cascade → xoá ca là xoá sạch
+//    chứng từ pháp lý.
+//  - KHÔNG cột tổng tiền trên MedicalCase (ADR-050) — derived từ Sale/Payment.
+//  - Trường lâm sàng an toàn dùng enum NULLABLE: null = "chưa ghi nhận", khác
+//    hẳn "ghi nhận là không" (ADR-048). Không Boolean @default(false).
+// ============================================================================
+
+enum CompanyModuleType {
+  HEALTHCARE
+}
+
+// ADR-047 — bật/tắt module theo từng Company. Bảng riêng (không phải cột
+// boolean trên Company) vì còn module khác ở Phần 8/9.
+model CompanyModule {
+  id              String            @id @default(cuid())
+  companyId       String
+  module          CompanyModuleType
+  enabledAt       DateTime          @default(now())
+  enabledByUserId String
+  disabledAt      DateTime?
+
+  company   Company @relation(fields: [companyId], references: [id])
+  enabledBy User    @relation("CompanyModuleEnabledBy", fields: [enabledByUserId], references: [id])
+
+  @@unique([companyId, module])
+  @@index([companyId])
+}
+
+enum MedicalCaseStatus {
+  OPEN
+  IN_TREATMENT
+  FOLLOW_UP
+  CLOSED
+  CANCELLED
+}
+
+enum MedicalCaseType {
+  CONSULTATION
+  TREATMENT
+  AESTHETIC_PROCEDURE
+  FOLLOW_UP
+  OTHER
+}
+
+// ADR-037/038 — Customer là identity DUY NHẤT; MedicalCase KHÔNG mang danh
+// tính/liên hệ khách. Tạo Customer KHÔNG tự sinh Case (legacy làm đúng điều
+// bị cấm: tiep-nhan/actions.ts:108 tự tạo hồ sơ nháp cho mọi khách mới).
+model MedicalCase {
+  id                     String            @id @default(cuid())
+  companyId              String
+  customerId             String
+  code                   String?
+  caseType               MedicalCaseType   @default(CONSULTATION)
+  status                 MedicalCaseStatus @default(OPEN)
+  chiefComplaint         String?
+  primaryClinicianUserId String?
+  organizationUnitId     String?
+  openedAt               DateTime          @default(now())
+  closedAt               DateTime?
+  closeReason            String?
+  createdByUserId        String
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  company          Company           @relation(fields: [companyId], references: [id])
+  customer         Customer          @relation(fields: [customerId], references: [id])
+  primaryClinician User?             @relation("MedicalCasePrimaryClinician", fields: [primaryClinicianUserId], references: [id])
+  organizationUnit OrganizationUnit? @relation(fields: [organizationUnitId], references: [id])
+  createdBy        User              @relation("MedicalCaseCreatedBy", fields: [createdByUserId], references: [id])
+
+  appointmentContexts HealthcareAppointmentContext[]
+  consultations       ClinicalConsultation[]
+  procedures          Procedure[]
+  consentRecords      ConsentRecord[]
+  clinicalPhotos      ClinicalPhoto[]
+  followUps           MedicalFollowUp[]
+
+  @@unique([companyId, code])
+  @@index([companyId, status, openedAt])
+  @@index([companyId, customerId])
+  @@index([companyId, primaryClinicianUserId])
+}
+
+// ADR-045 — KHÔNG có engine lịch thứ 2. Context treo BÊN CẠNH Appointment Core
+// (Appointment không có FK trỏ sang Healthcare) để giữ chiều phụ thuộc một
+// chiều của ADR-036. @@unique(appointmentId) = mỗi Appointment tối đa 1 context.
+// Legacy khoá cứng CaseRecord 1-1 Appointment rồi phải đẻ ra FollowUp để lách —
+// ở đây Case 1-N Appointment qua bảng này.
+model HealthcareAppointmentContext {
+  id            String  @id @default(cuid())
+  companyId     String
+  appointmentId String  @unique
+  medicalCaseId String
+  purpose       String?
+  specialty     String?
+
+  company     Company     @relation(fields: [companyId], references: [id])
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  medicalCase MedicalCase @relation(fields: [medicalCaseId], references: [id])
+
+  @@index([companyId, medicalCaseId])
+}
+
+enum ClinicalRecordStatus {
+  DRAFT
+  FINAL
+}
+
+// ADR-039 — sau FINAL là bất biến, sửa CHỈ qua addendum. Legacy KHÔNG có toàn
+// vẹn tác giả: ho-so/actions.ts:178-189 ghi đè createdById mỗi lần update.
+model ClinicalConsultation {
+  id                String               @id @default(cuid())
+  companyId         String
+  medicalCaseId     String
+  clinicianUserId   String
+  status            ClinicalRecordStatus @default(DRAFT)
+  subjective        String?
+  objective         String?
+  assessment        String?
+  plan              String?
+  finalizedAt       DateTime?
+  finalizedByUserId String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  company     Company     @relation(fields: [companyId], references: [id])
+  medicalCase MedicalCase @relation(fields: [medicalCaseId], references: [id])
+  clinician   User        @relation("ConsultationClinician", fields: [clinicianUserId], references: [id])
+  finalizedBy User?       @relation("ConsultationFinalizedBy", fields: [finalizedByUserId], references: [id])
+
+  addenda        ClinicalConsultationAddendum[]
+  screeningItems ClinicalScreeningItem[]
+
+  @@index([companyId, medicalCaseId, createdAt])
+  @@index([companyId, status])
+}
+
+model ClinicalConsultationAddendum {
+  id             String   @id @default(cuid())
+  companyId      String
+  consultationId String
+  authorUserId   String
+  content        String
+  reason         String
+  createdAt      DateTime @default(now())
+
+  company      Company              @relation(fields: [companyId], references: [id])
+  consultation ClinicalConsultation @relation(fields: [consultationId], references: [id])
+  author       User                 @relation("ConsultationAddendumAuthor", fields: [authorUserId], references: [id])
+
+  @@index([companyId, consultationId, createdAt])
+}
+
+// ADR-048 — answer NULLABLE. null = "chưa ghi nhận", KHÁC "ghi nhận là không".
+// Legacy nhét screening vào cột Json không schema, đang chứa ít nhất 2 thế hệ
+// dữ liệu khác nhau (lib/consultation-sheet.ts:35-40 phải đọc tương thích ngược).
+enum ScreeningAnswer {
+  YES
+  NO
+}
+
+model ClinicalScreeningItem {
+  id             String           @id @default(cuid())
+  companyId      String
+  consultationId String
+  itemKey        String
+  question       String
+  answer         ScreeningAnswer?
+  note           String?
+  recordedAt     DateTime?
+
+  company      Company              @relation(fields: [companyId], references: [id])
+  consultation ClinicalConsultation @relation(fields: [consultationId], references: [id])
+
+  @@unique([consultationId, itemKey])
+  @@index([companyId, consultationId])
+}
+
+enum ProcedureStatus {
+  PLANNED
+  READY
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// ADR-050 — Sale ≠ Procedure: saleLineId OPTIONAL, không ràng buộc 1-1.
+// 1 Sale có thể có N Procedure; 1 Case có thể có N Sale.
+model Procedure {
+  id                     String          @id @default(cuid())
+  companyId              String
+  medicalCaseId          String
+  catalogItemId          String?
+  saleLineId             String?
+  procedureType          String?
+  status                 ProcedureStatus @default(PLANNED)
+  primaryClinicianUserId String?
+  organizationUnitId     String?
+  scheduledAt            DateTime?
+  performedAt            DateTime?
+  clinicalNotes          String?
+  createdByUserId        String
+  completedByUserId      String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  company          Company           @relation(fields: [companyId], references: [id])
+  medicalCase      MedicalCase       @relation(fields: [medicalCaseId], references: [id])
+  catalogItem      CatalogItem?      @relation(fields: [catalogItemId], references: [id])
+  saleLine         SaleLine?         @relation(fields: [saleLineId], references: [id])
+  primaryClinician User?             @relation("ProcedurePrimaryClinician", fields: [primaryClinicianUserId], references: [id])
+  organizationUnit OrganizationUnit? @relation(fields: [organizationUnitId], references: [id])
+  createdBy        User              @relation("ProcedureCreatedBy", fields: [createdByUserId], references: [id])
+  completedBy      User?             @relation("ProcedureCompletedBy", fields: [completedByUserId], references: [id])
+
+  materialUsages ProcedureMaterialUsage[]
+  clinicalPhotos ClinicalPhoto[]
+  followUps      MedicalFollowUp[]
+
+  @@index([companyId, medicalCaseId])
+  @@index([companyId, status, scheduledAt])
+  @@index([companyId, saleLineId])
+}
+
+enum ProcedureMaterialUsageStatus {
+  RECORDED
+  REVERSED
+}
+
+// ADR-043 — KHÔNG có kho riêng cho healthcare. Mỗi usage nối 1-1 tới đúng một
+// StockMovement do issueStock() sinh ra. Legacy tự chế idempotency bằng cờ
+// CaseService.bomApplied và vẫn ghi đôi MaterialUsage + StockMovement.
+model ProcedureMaterialUsage {
+  id                  String                       @id @default(cuid())
+  companyId           String
+  procedureId         String
+  inventoryItemId     String
+  inventoryLocationId String
+  quantity            Decimal                      @db.Decimal(18, 3)
+  status              ProcedureMaterialUsageStatus @default(RECORDED)
+  stockMovementId     String?                      @unique
+  reversalReason      String?
+  recordedByUserId    String
+  recordedAt          DateTime                     @default(now())
+
+  company           Company           @relation(fields: [companyId], references: [id])
+  procedure         Procedure         @relation(fields: [procedureId], references: [id])
+  inventoryItem     InventoryItem     @relation(fields: [inventoryItemId], references: [id])
+  inventoryLocation InventoryLocation @relation(fields: [inventoryLocationId], references: [id])
+  stockMovement     StockMovement?    @relation(fields: [stockMovementId], references: [id])
+  recordedBy        User              @relation("ProcedureMaterialRecordedBy", fields: [recordedByUserId], references: [id])
+
+  @@index([companyId, procedureId])
+  @@index([companyId, inventoryItemId])
+}
+
+enum ConsentType {
+  PROCEDURE
+  ANESTHESIA
+  PHOTO_USAGE
+  DATA_PROCESSING
+  OTHER
+}
+
+enum ConsentStatus {
+  DRAFT
+  SIGNED
+  REVOKED
+  EXPIRED
+}
+
+// ADR-042 — mẫu Company-scoped; bản đã dùng thì bất biến (đổi mẫu tạo version
+// mới, không sửa tại chỗ).
+model ConsentTemplate {
+  id              String           @id @default(cuid())
+  companyId       String
+  code            String
+  title           String
+  body            String
+  version         Int              @default(1)
+  consentType     ConsentType      @default(PROCEDURE)
+  status          ArchivableStatus @default(ACTIVE)
+  createdByUserId String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id])
+  createdBy User    @relation("ConsentTemplateCreatedBy", fields: [createdByUserId], references: [id])
+
+  consentRecords ConsentRecord[]
+
+  @@unique([companyId, code, version])
+  @@index([companyId, status])
+}
+
+// ADR-042 — snapshot nội dung + version TẠI THỜI ĐIỂM KÝ, nên sửa template sau
+// này không bao giờ đổi consent đã ký. Có REVOKED tường minh: legacy KHÔNG có
+// cách ghi nhận khách rút đồng ý, cách duy nhất là XOÁ bản ghi
+// (consent-actions.ts:75) — mất sạch bằng chứng đã từng đồng ý.
+model ConsentRecord {
+  id                 String        @id @default(cuid())
+  companyId          String
+  medicalCaseId      String
+  consentTemplateId  String?
+  consentType        ConsentType   @default(PROCEDURE)
+  status             ConsentStatus @default(DRAFT)
+  titleSnapshot      String
+  bodySnapshot       String
+  templateVersion    Int?
+  signedAt           DateTime?
+  signedByCustomerId String?
+  signerName         String?
+  signerRelationship String?
+  revokedAt          DateTime?
+  revokedByUserId    String?
+  revokeReason       String?
+  expiresAt          DateTime?
+  createdByUserId    String
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  company          Company          @relation(fields: [companyId], references: [id])
+  medicalCase      MedicalCase      @relation(fields: [medicalCaseId], references: [id])
+  consentTemplate  ConsentTemplate? @relation(fields: [consentTemplateId], references: [id])
+  signedByCustomer Customer?        @relation("ConsentSignedByCustomer", fields: [signedByCustomerId], references: [id])
+  revokedBy        User?            @relation("ConsentRecordRevokedBy", fields: [revokedByUserId], references: [id])
+  createdBy        User             @relation("ConsentRecordCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([companyId, medicalCaseId, status])
+  @@index([companyId, consentType, status])
+}
+
+enum ClinicalPhotoType {
+  BEFORE
+  AFTER
+  PROGRESS
+  CLINICAL_FINDING
+  OTHER
+}
+
+// ADR-041 — DB CHỈ giữ metadata; binary nằm ngoài DB, truy cập qua route server
+// có permission check (KHÔNG signed URL ở Phần 7 vì target chưa có storage
+// provider nào). storageKey là ID opaque, KHÔNG chứa tên bệnh nhân.
+// Legacy lưu đường dẫn trần /media/<tệp>, không checksum/sizeBytes, và xoá bản
+// ghi mà không xoá tệp vật lý → kho tệp phình vĩnh viễn.
+model ClinicalPhoto {
+  id               String            @id @default(cuid())
+  companyId        String
+  medicalCaseId    String
+  procedureId      String?
+  photoType        ClinicalPhotoType @default(CLINICAL_FINDING)
+  bodyArea         String?
+  capturedAt       DateTime          @default(now())
+  storageKey       String            @unique
+  fileName         String
+  mimeType         String
+  sizeBytes        Int
+  checksumSha256   String
+  status           ArchivableStatus  @default(ACTIVE)
+  archiveReason    String?
+  archivedAt       DateTime?
+  archivedByUserId String?
+  uploadedByUserId String
+  createdAt        DateTime          @default(now())
+
+  company     Company     @relation(fields: [companyId], references: [id])
+  medicalCase MedicalCase @relation(fields: [medicalCaseId], references: [id])
+  procedure   Procedure?  @relation(fields: [procedureId], references: [id])
+  uploadedBy  User        @relation("ClinicalPhotoUploadedBy", fields: [uploadedByUserId], references: [id])
+  archivedBy  User?       @relation("ClinicalPhotoArchivedBy", fields: [archivedByUserId], references: [id])
+
+  @@index([companyId, medicalCaseId, status])
+  @@index([companyId, procedureId])
+}
+
+enum MedicalFollowUpStatus {
+  PLANNED
+  DUE
+  DONE
+  MISSED
+  CANCELLED
+}
+
+// ADR-045 — ghi nhận Ý NGHĨA LÂM SÀNG của lần theo dõi. Việc cần người làm là
+// WorkItem của Work Core (workItemId), KHÔNG có trường assignment/due kiểu task
+// ở đây. Hoàn tất WorkItem KHÔNG bao giờ tự sinh kết luận lâm sàng.
+model MedicalFollowUp {
+  id              String                @id @default(cuid())
+  companyId       String
+  medicalCaseId   String
+  procedureId     String?
+  workItemId      String?
+  scheduledFor    DateTime
+  status          MedicalFollowUpStatus @default(PLANNED)
+  clinicalOutcome String?
+  closedAt        DateTime?
+  createdByUserId String
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  company     Company     @relation(fields: [companyId], references: [id])
+  medicalCase MedicalCase @relation(fields: [medicalCaseId], references: [id])
+  procedure   Procedure?  @relation(fields: [procedureId], references: [id])
+  workItem    WorkItem?   @relation(fields: [workItemId], references: [id])
+  createdBy   User        @relation("MedicalFollowUpCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([companyId, medicalCaseId])
+  @@index([companyId, status, scheduledFor])
 }

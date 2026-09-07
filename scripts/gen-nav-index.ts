@@ -11,9 +11,8 @@
  *  - ADR one-liner  -> tra loi "da chot quyet dinh X chua" (hoi nhieu nhat)
  *  - Prisma model   -> biet co model nao truoc khi dinh tao model moi
  *  - Permission key -> biet key nao ton tai truoc khi them key moi
- *  - Section map cua RIENG cac doc phai sua moi Phan
- * KHONG dua vao: danh sach export (dung `rg "^export.*<ten>" src/`),
- * section map cua docs/domain (file nho, doc thang).
+ * KHONG dua vao: danh sach export (dung `rg` tim), section map cua bat ky
+ * doc nao (mot lenh `rg -n "^## " <file>` re hon).
  *
  * Chay: `npm run nav`. Idempotent — chi ghi de giua 2 marker AUTO.
  * Zero dependency: repo ~16k dong code that, khong dang cai ctags/repomix.
@@ -65,22 +64,10 @@ const perms = scan(["src", "lib", "permissions", "registry.ts"], /^\s*"([a-z]+\.
 out.push(`\n### ${perms.length} permission key — \`src/lib/permissions/registry.ts\`\n`);
 out.push(perms.map((p) => p.text).join(" · "));
 
-// ---- Section map: CHI cac doc phai sua moi Phan (them muc "Cap nhat Phan N") ----
-const PER_PHASE_DOCS = [
-  ["docs", "architecture", "TARGET_ARCHITECTURE.md"],
-  ["docs", "architecture", "DOMAIN_MODEL.md"],
-  ["docs", "architecture", "DATA_OWNERSHIP.md"],
-  ["docs", "architecture", "TENANT_INVARIANTS.md"],
-  ["docs", "architecture", "SECURITY_BOUNDARIES.md"],
-  ["docs", "architecture", "LEGACY_TO_TARGET_MAP.md"],
-  ["docs", "legacy", "SALVAGE_LEDGER.md"],
-  ["docs", "security", "AUTHORIZATION_MODEL.md"],
-];
-out.push("\n### Doc phải cập nhật mỗi Phần — section + dòng để chèn đúng chỗ\n");
-for (const d of PER_PHASE_DOCS) {
-  const hs = scan(d, /^## (.+)$/);
-  out.push(`**\`${d.join("/")}\`** ` + hs.map((h) => `${h.text}\`:${h.line}\``).join(" · "));
-}
+// Section map cua 8 doc phai sua moi Phan DA BI CAT khoi index: mot lenh
+// `rg -n "^## " <8 file>` thay the duoc no re hon, ma nguyen tac cua chinh
+// file nay la CHI giu thu rg khong thay the duoc. Cong thuc rg nam trong
+// phan viet tay cua NAVIGATION.md.
 
 const body = `${START}\n<!-- SINH TU DONG boi scripts/gen-nav-index.ts — dung sua tay, chay \`npm run nav\` -->\n\n${out.join("\n")}\n\n${END}`;
 const cur = readFileSync(NAV, "utf8");
