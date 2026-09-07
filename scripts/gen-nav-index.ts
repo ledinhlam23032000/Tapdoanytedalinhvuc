@@ -45,7 +45,13 @@ const out: string[] = [];
 // ---- ADR: cau hoi lap lai nhieu nhat la "da chot quyet dinh X chua" ----
 const adrs = scan(["docs", "architecture", "DECISIONS.md"], /^## (ADR-\d+.*)$/);
 out.push(`### ${adrs.length} ADR — \`docs/architecture/DECISIONS.md:<dòng>\`\n`);
-for (const a of adrs) out.push(`\`:${a.line}\` ${a.text}`);
+// Cat tieu de con 60 ky tu: du de biet CO NEN nhay toi ADR do khong, khong
+// du de thay the viec doc no. Tieu de day du dai trung binh ~110 ky tu ->
+// cat di ~500 token, giu index trong ngan sach khi so ADR tang.
+for (const a of adrs) {
+  const t = a.text.replace(/`/g, "");
+  out.push(`\`:${a.line}\` ${t.length > 60 ? t.slice(0, 60) + "…" : t}`);
+}
 
 // ---- Prisma: biet co gi truoc khi dinh tao model moi ----
 const models = scan(["prisma", "schema.prisma"], /^model (\w+)/);
