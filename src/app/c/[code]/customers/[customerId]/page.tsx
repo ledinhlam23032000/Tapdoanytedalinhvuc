@@ -5,6 +5,9 @@ import { AuthorizationError } from "@/lib/authorization/errors";
 import { getCustomerDetail, getCustomerTimeline } from "@/lib/domain/customer-service";
 import { getOpenWorkForCustomer } from "@/lib/domain/work-service";
 import { getOrganizationTree } from "@/lib/domain/organization-service";
+import { isHealthcareModuleEnabled } from "@/lib/domain/healthcare/module-service";
+import { getMedicalCasesForCustomer } from "@/lib/domain/healthcare/medical-case-service";
+import { MEDICAL_CASE_STATUS_LABEL, MEDICAL_CASE_TYPE_LABEL } from "../../work-labels";
 import { db } from "@/lib/db";
 import {
   CUSTOMER_STATUS_LABEL,
@@ -60,6 +63,15 @@ export default async function CustomerDetailPage({
   const canInteract = ctx.permissions.has("customer.interaction.create");
   const canCreateAppointment = ctx.permissions.has("appointment.create");
   const canCreateSale = ctx.permissions.has("sales.create");
+  // Bất biến #102/#189: tab "Hồ sơ chuyên môn" CHỈ tồn tại khi CẢ HAI đúng —
+  // module đã bật VÀ actor có quyền. Thiếu một trong hai thì KHÔNG render ra
+  // DOM (không phải ẩn bằng CSS — không có phần tử nào trong tree cả).
+  const healthcareVisible =
+    ctx.permissions.has("healthcare.case.view") && (await isHealthcareModuleEnabled(ctx.company.id));
+
+  const medicalCases = healthcareVisible
+    ? await getMedicalCasesForCustomer(ctx.actor.id, ctx.company.id, customerId)
+    : [];
 
   const [companyMembers, sources, organizationUnits] = await Promise.all([
     canAssign
@@ -247,6 +259,30 @@ export default async function CustomerDetailPage({
                 <li key={w.id} className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm">
                   <span className="text-zinc-900">{w.title}</span>
                   <span className="ml-2 text-xs text-zinc-500">{w.assignee?.displayName ?? "Chưa giao"}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+ 
+      {healthcareVisible ? (
+        <section className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold text-zinc-900">Hồ sơ chuyên môn</h3>
+          {medicalCases.length === 0 ? (
+            <p className="rounded-md border border-dashed border-zinc-300 px-4 py-6 text-center text-sm text-zinc-500">
+              Chưa có hồ sơ bệnh án nào.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {medicalCases.map((c) => (
+                <li key={c.id} className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm">
+                  <Link href={`/c/${code}/healthcare/${c.id}`} className="text-zinc-900 hover:underline">
+                    {MEDICAL_CASE_TYPE_LABEL[c.caseType] ?? c.caseType}
+                  </Link>
+                  <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
+                    {MEDICAL_CASE_STATUS_LABEL[c.status] ?? c.status}
+                  </span>
                 </li>
               ))}
             </ul>
