@@ -88,7 +88,7 @@ scripts/                        bootstrap-founder · gen-nav-index · _scratch-*
 <!-- AUTO:START -->
 <!-- SINH TU DONG boi scripts/gen-nav-index.ts — dung sua tay, chay `npm run nav` -->
 
-### 35 ADR — `docs/architecture/DECISIONS.md:<dòng>`
+### 50 ADR — `docs/architecture/DECISIONS.md:<dòng>`
 
 `:5` ADR-001 — Greenfield target repository
 `:18` ADR-002 — Modular monolith
@@ -125,6 +125,21 @@ scripts/                        bootstrap-founder · gen-nav-index · _scratch-*
 `:717` ADR-033 — Không xây multi-currency/FX engine ở Phần 6; tái dùng `Company.currency` có sẵn từ Phần 3
 `:735` ADR-034 — Idempotency key bắt buộc cho command tiền/kho rủi ro cao
 `:755` ADR-035 — Không xây AccountsPayable/Invoice kế toán/PurchaseOrder/Supplier/BankReconciliation/Tax/ShareholderDistribution/CostCenter/Company-level-Budgeting ở Phần 6
+`:777` ADR-036 — Healthcare là vertical phụ thuộc MỘT CHIỀU vào Core, đặt tại `src/lib/domain/healthcare/`
+`:800` ADR-037 — `Customer` là identity DUY NHẤT của bệnh nhân; KHÔNG tạo `HealthcareProfile` ở Phần 7
+`:822` ADR-038 — `MedicalCase.companyId` NOT NULL và là nguồn scoping trực tiếp; CẤM suy Company qua `Customer`
+`:844` ADR-039 — Bản ghi lâm sàng đã FINAL là bất biến; sửa CHỈ qua addendum
+`:867` ADR-040 — KHÔNG cascade delete vào lịch sử lâm sàng; dùng Restrict + archive
+`:886` ADR-041 — File lâm sàng: metadata trong DB, binary ngoài DB, truy cập qua server proxy có permission check (KHÔNG signed URL ở Phần 7)
+`:913` ADR-042 — `ConsentRecord` là bản ghi riêng có snapshot nội dung + version, có REVOKED; KHÔNG phải boolean
+`:937` ADR-043 — Vật tư thủ thuật đi qua `issueStock()` của Inventory; idempotent theo `(sourceType, sourceId)`
+`:961` ADR-044 — Precondition của Procedure theo policy per `procedureType`; readiness thuần deterministic
+`:978` ADR-045 — Không có task engine thứ hai; follow-up lâm sàng sinh `WorkItem` của Work Core
+`:998` ADR-046 — Vai trò chuyên môn KHÔNG nằm trên `User`; quyền đến từ permission pack trên `CompanyMembership`
+`:1020` ADR-047 — Module enablement qua bảng `CompanyModule`; `CompanyType` chỉ gợi ý, KHÔNG đổi schema
+`:1040` ADR-048 — "Chưa ghi nhận" KHÁC "ghi nhận là không"; cấm giá trị âm tính mặc định
+`:1060` ADR-049 — Phần 7 KHÔNG migrate dữ liệu lâm sàng thật; chỉ fixture synthetic
+`:1077` ADR-050 — `MedicalCase` KHÔNG có cột tổng tiền; commercial summary luôn derived từ Sale/Finance
 
 ### Prisma `prisma/schema.prisma` — 32 model, 38 enum
 
@@ -142,7 +157,7 @@ ecosystem.view · ecosystem.manage · ecosystem.membership.manage · ecosystem.c
 **`docs/architecture/DOMAIN_MODEL.md`** Cập nhật Phần 6 — Finance/Payroll/Commission/Inventory đã implement thật`:3` · Cập nhật Phần 5 — CRM/Lead/Appointment/Sales đã implement thật`:17` · Cập nhật Phần 4 — Organization/Project/Work Core đã implement thật`:29` · Sơ đồ tổng quan`:48` · Platform (không phải domain nghiệp vụ)`:80` · Identity`:94` · Ecosystem`:110` · Company — first-class tenant`:158` · Organization — nơi con người thuộc về`:208` · Project — nơi công việc có vòng đời diễn ra`:262` · Work Core — một engine duy nhất`:298` · Generic Business Domains (thuộc Company)`:325` · Healthcare Vertical (extension, không phải core)`:369` · AI Domain (architecture only — runtime đầy đủ ở Phần 8)`:380` · Approval / Audit — cross-cutting, không unify vật lý sớm`:410` · Trả lời các câu hỏi bắt buộc (Master Prompt mục CI)`:421` · 10 Acceptance Scenario (Master Prompt CXXXV–CXLIV) — đã review qua model trên`:439`
 **`docs/architecture/DATA_OWNERSHIP.md`** Cập nhật Phần 4`:33` · Cập nhật Phần 5`:40` · Cập nhật Phần 6`:49` · Ghi chú UNKNOWN (không có ở core entity quan trọng — quality gate CXXX)`:72`
 **`docs/architecture/TENANT_INVARIANTS.md`** Nguyên tắc nền`:7` · Threat model tối thiểu (mục CIV)`:38` · Acceptance test bắt buộc (ánh xạ 1-1 vào test thật ở Phần 3)`:54` · Cập nhật Phần 4 — mở rộng acceptance test sang Organization/Work/Project`:94` · Cập nhật Phần 5 — mở rộng sang Customer/Lead/Appointment/Sales`:110` · Cập nhật Phần 6 — mở rộng sang Finance/Payroll/Commission/Inventory`:125` · Không lặp lại (đối chiếu trực tiếp bằng chứng từ Legacy Capability Matrix)`:144`
-**`docs/architecture/SECURITY_BOUNDARIES.md`** Ranh giới bắt buộc chứng minh được (quality gate — Master Prompt mục CXXXI)`:7` · Identity vs Permission (Platform boundary)`:20` · AI Safety Boundary`:51` · Audit Boundary`:80` · Secrets Boundary`:93` · Platform Operator`:103` · Cập nhật Phần 5 — CRM/Sales/Appointment permission thật`:112` · Cập nhật Phần 6 — Finance/Payroll/Commission/Inventory permission thật`:126` · Red-team review`:147`
+**`docs/architecture/SECURITY_BOUNDARIES.md`** Ranh giới bắt buộc chứng minh được (quality gate — Master Prompt mục CXXXI)`:7` · Identity vs Permission (Platform boundary)`:20` · AI Safety Boundary`:51` · Audit Boundary`:80` · Secrets Boundary`:93` · Platform Operator`:103` · Cập nhật Phần 5 — CRM/Sales/Appointment permission thật`:112` · Cập nhật Phần 6 — Finance/Payroll/Commission/Inventory permission thật`:126` · Red-team review`:148`
 **`docs/architecture/LEGACY_TO_TARGET_MAP.md`** Cập nhật Phần 4 — trạng thái implement thật của các dòng Organization/Work`:40` · Cập nhật Phần 5 — Legacy Capability Matrix rows (mục CCLXIX)`:54` · Cập nhật Phần 6 — Legacy Capability Matrix rows`:71` · Legacy Role Map (bổ sung Phần 3 — mục CIII-CVII)`:83` · UNKNOWN cần migration tooling thật xử lý (Phần 10, không đoán ở đây)`:107`
 **`docs/legacy/SALVAGE_LEDGER.md`** Security comparison — kết quả implement Phần 3 (mục CCXXXVIII)`:6` · Cập nhật Phần 4`:22` · Cập nhật Phần 5`:41` · Cập nhật Phần 6`:53` · Tuyệt đối KHÔNG copy (secrets — chỉ ghi path, không mở/không quote nội dung)`:66` · Pattern kỹ thuật đáng salvage nguyên (code pattern, không phải file copy)`:88` · Bài học KHÔNG được lặp lại (đã trả giá ở ZenithTasks)`:104` · Migration wave đề xuất (tham khảo từ audit Phiên 2 & 4 — Phần 2 sẽ quyết định chính thức)`:130`
 **`docs/security/AUTHORIZATION_MODEL.md`** Identity`:9` · Session`:19` · Ecosystem Membership → Company Membership`:27` · Role preset → Permission (static mapping)`:41` · "Inheritance" Ecosystem → Company — quyết định quan trọng nhất Phần 3`:62` · Quyết định bổ sung khi implement (chưa có trong Phần 2, chốt ở đây)`:97` · Audit`:116` · Điều đã cố tình KHÔNG làm ở Phần 3 (đúng phạm vi)`:124` · Cập nhật Phần 5 — CRM/Sales/Appointment dùng nguyên cơ chế Phần 3`:131` · Cập nhật Phần 6 — Finance/Payroll/Commission/Inventory dùng nguyên cơ chế Phần 3`:147`

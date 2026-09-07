@@ -773,3 +773,327 @@ tính toán lồng trong Payroll/Commission, không phải AP ledger). Không c�
 **Hệ quả:** `docs/architecture/LEGACY_TO_TARGET_MAP.md` ghi các hạng mục
 này là DEFER (không phải KEEP_CONCEPT), tránh việc Phần 7+ vô tình coi đây
 là việc chưa làm xong của Phần 6.
+
+## ADR-036 — Healthcare là vertical phụ thuộc MỘT CHIỀU vào Core, đặt tại `src/lib/domain/healthcare/`
+
+**Quyết định:** Toàn bộ code Healthcare nằm trong thư mục riêng
+`src/lib/domain/healthcare/` (giữ đúng quy ước `src/lib/domain/` đã dùng từ
+Phần 4, không đổi sang `src/domains/healthcare/` như ví dụ trong spec).
+Chiều phụ thuộc là một chiều: Healthcare được import Core, **Core tuyệt đối
+không import Healthcare**. Không có model Healthcare nào định nghĩa lại
+capability Core.
+
+**Vì sao:** Mục CCCLX cho phép "hoặc quy ước dự án" nên giữ nguyên
+`src/lib/domain/` để không tạo hai quy ước song song. Mục CCCLXI-CCCLXII
+yêu cầu chiều phụ thuộc `Core ← Healthcare`, không vòng. Bất biến #3/#201/
+#203 (`PART7_SPEC_DIGEST.md`) cấm tồn tại `ClinicCustomer`/
+`MedicalAppointment`/`ClinicPayment`/`ClinicPayroll`/`ClinicInventory`/
+`ClinicTask`. Khảo cổ cho thấy legacy vi phạm đúng điều này: `CaseRecord`
+là god-model gộp 5 trách nhiệm (đơn hàng + hồ sơ lâm sàng + phễu bán hàng +
+hoa hồng CTV + khoá bản ghi tự chế) — 12 model khác treo vào nó, khiến không
+tách được module nào ra khỏi module nào.
+
+**Hệ quả:** Có test kiến trúc chặn `import` từ Core sang Healthcare. Bất kỳ
+nhu cầu "Core cần biết về Healthcare" phải giải bằng cách Healthcare đăng ký
+vào Core qua điểm mở rộng tường minh, không phải Core import ngược.
+
+## ADR-037 — `Customer` là identity DUY NHẤT của bệnh nhân; KHÔNG tạo `HealthcareProfile` ở Phần 7
+
+**Quyết định:** Không có bảng identity thứ hai cho bệnh nhân. Không tạo
+`HealthcareCustomer`/`ClinicCustomer`/`PatientCustomer`, và **cũng chưa tạo
+`HealthcareProfile`** ở Phần 7. Mọi tham chiếu bệnh nhân quy về `Customer`
+(Phần 5). Tạo `Customer` KHÔNG tự sinh `MedicalCase`.
+
+**Vì sao:** Bất biến #4/#6/#103 cấm bảng identity thứ hai và cấm danh bạ
+bệnh nhân riêng. Mục XIII cho phép `HealthcareProfile` nhưng kèm điều kiện
+"chỉ tạo khi có use case thật" (quyết định mở #7) — hiện chưa có use case
+nào chứng minh cần dữ liệu y tế **ổn định xuyên suốt mọi Case** tách khỏi
+`Customer`; dựng sẵn một bảng rỗng là vi phạm nguyên tắc "không xây trước khi
+có Company thật cần" đã áp dụng nhất quán từ Phần 4/5. Bất biến #5 cấm
+auto-create — khảo cổ cho thấy legacy làm đúng điều bị cấm:
+`web/src/app/(app)/tiep-nhan/actions.ts:108-119` tự tạo một `CaseRecord`
+NHÁP (`note: "Hồ sơ nháp tự tạo khi tiếp nhận khách mới"`) cho **mọi** khách
+vừa tiếp nhận, khiến số `CaseRecord` không phản ánh số ca điều trị thật.
+
+**Hệ quả:** Khi migrate (Phần 10), tiêu chí lọc `CaseRecord` phải dựa trên
+"có `CaseService`/`Payment` thật", không dựa trên sự tồn tại của bản ghi.
+Nếu sau này cần `HealthcareProfile`, thêm bằng ADR mới kèm use case cụ thể.
+
+## ADR-038 — `MedicalCase.companyId` NOT NULL và là nguồn scoping trực tiếp; CẤM suy Company qua `Customer`
+
+**Quyết định:** Mọi entity Healthcare mang `companyId` NOT NULL của riêng
+nó. Authorization/scoping đọc thẳng `companyId` trên chính entity đó. **Cấm**
+suy ra Company bằng cách đi qua `customerId → Customer.companyId`. Ràng buộc
+`MedicalCase.companyId === Customer.companyId` được enforce ở domain service
+khi tạo, và mọi relation (`primaryClinicianUserId`, `organizationUnitId`...)
+phải cùng Company.
+
+**Vì sao:** Bất biến #9 nêu đích danh lệnh cấm suy gián tiếp; #53/#54/#55/
+#56/#198 mở rộng cho toàn bộ entity. Đây là bài học đắt nhất của dự án
+(`user.role === "ADMIN"` bypass `ZProjectMember`) — xem `TENANT_INVARIANTS.md`.
+Khảo cổ củng cố mạnh: **cả 4 agent độc lập đều phát hiện KHÔNG một model
+legacy nào có `companyId`/`ecosystemId`/`tenantId`** — toàn bộ trục nghiệp vụ
+clinic là single-tenant cứng, phân quyền hoàn toàn nằm ở tầng ứng dụng
+(`requireCap`, `hasCaseAccess`, `isLockedFor`), DB không ràng buộc gì. Suy
+Company gián tiếp sẽ tái tạo đúng lỗ hổng đó dưới dạng mới.
+
+**Hệ quả:** Dùng lại nguyên `scope-guards.ts` (Phần 4-6), thêm assert cho
+từng entity Healthcare. Test cross-company cho **mọi** FK mới, theo đúng
+ma trận 9 loại ID injection ở mục CLXXXIII.
+
+## ADR-039 — Bản ghi lâm sàng đã FINAL là bất biến; sửa CHỈ qua addendum
+
+**Quyết định:** `ClinicalConsultation` (và mọi bản ghi lâm sàng có trạng thái
+chốt) dùng `DRAFT → FINAL`. Sau FINAL, đường update nội dung gốc bị chặn ở
+domain service; thay đổi duy nhất được phép là tạo **addendum** — bản ghi mới
+trỏ về bản gốc, bản gốc giữ nguyên vĩnh viễn. Hard delete bản ghi lâm sàng đã
+finalize luôn bị từ chối. Mỗi bản ghi có `clinicianUserId` (tác giả) +
+`createdAt`/`updatedAt` + audit mỗi lần đổi.
+
+**Vì sao:** Bất biến #22/#89/#125/#136/#166/#167/#187/#188 và mục XXIX-XXXI,
+CXX-CXXI. Quyết định mở #80 cho chọn giữa "old/new trace (versioning)" và
+"addendum" — chọn **addendum** vì đây đúng là pattern đã chứng minh ở Phần 6
+với `LedgerEntry` (ADR-027: bất biến + correction record), giữ một triết lý
+duy nhất cho mọi sổ bất biến trong hệ thống thay vì hai cơ chế khác nhau.
+Khảo cổ cho thấy legacy KHÔNG có tính toàn vẹn tác giả:
+`ho-so/actions.ts:178-189` dùng chung một object `data` cho cả create lẫn
+update nên `ConsultationRecord.createdById` **bị ghi đè mỗi lần sửa** — trường
+này hiện đang mang ý nghĩa sai trong dữ liệu thật.
+
+**Hệ quả:** Cần cặp `createdBy`/`updatedBy` chuẩn cho mọi entity lâm sàng
+(legacy chỉ có `createdById`). Autosave chỉ được ghi trạng thái DRAFT, không
+có code path nào để autosave chuyển sang FINAL (bất biến #109).
+
+## ADR-040 — KHÔNG cascade delete vào lịch sử lâm sàng; dùng Restrict + archive
+
+**Quyết định:** Mọi FK trỏ tới bản ghi lâm sàng dùng `onDelete: Restrict`
+(hoặc không cascade), không bao giờ `Cascade`. Xoá `Customer`/đóng
+`MedicalCase` là **archive**, không xoá dữ liệu. Archive `Customer` không làm
+mất lịch sử healthcare của họ.
+
+**Vì sao:** Bất biến #141/#142/#88/#77 (mục CCLXXXIII-CCLXXXV). Đây là phát
+hiện khảo cổ nghiêm trọng nhất: **cả 3 loại chứng từ có giá trị pháp lý cao
+nhất đều nằm trên đường xoá dây chuyền** — `CaseConsent` (dòng 943) và
+`CaseDocument` (dòng 981) `onDelete: Cascade` từ `CaseRecord`,
+`StaffAgreement` (dòng 1191) `onDelete: Cascade` từ `User`. Xoá một ca điều
+trị là xoá vĩnh viễn cả phiếu đồng ý lẫn hồ sơ y khoa; xoá một nhân sự là xoá
+hợp đồng đã ký của họ. `ConsultationRecord` (1157) và `FollowUp` (722) cũng
+Cascade, không hề có soft-delete.
+
+**Hệ quả:** Kho chứng từ tách khỏi vòng đời bản ghi nghiệp vụ. Mọi bảng lâm
+sàng có `status` archive thay vì phụ thuộc việc bản ghi cha còn sống.
+
+## ADR-041 — File lâm sàng: metadata trong DB, binary ngoài DB, truy cập qua server proxy có permission check (KHÔNG signed URL ở Phần 7)
+
+**Quyết định:** DB chỉ lưu metadata (`companyId`, owner, `fileName`,
+`mimeType`, `sizeBytes`, `checksum`, storage key opaque). Binary lưu ngoài DB.
+Truy cập ảnh/file lâm sàng đi qua **route server có kiểm tra quyền tại thời
+điểm request** (proxy), **không** dùng signed URL ở Phần 7. Đủ 4 lớp kiểm
+tra: authenticated → Company scope → Healthcare permission → case access.
+Không có URL công khai/CDN. Storage path và tên file dùng ID opaque, không
+chứa tên bệnh nhân. Xoá ảnh mặc định là archive/void kèm reason + audit.
+
+**Vì sao:** Bất biến #32/#33/#34/#35/#38/#84/#92/#113/#115/#127/#150/#191.
+Quyết định mở #86/#46 để ngỏ giữa signed URL và proxy, và yêu cầu "xác nhận
+storage provider có hỗ trợ signed URL không" — **đã xác minh: target hiện
+KHÔNG có bất kỳ hạ tầng lưu file nào** (không dependency s3/storage/multer/
+sharp nào trong `package.json`; grep `upload|multipart|blob|s3` trong `src/`
+chỉ ra false positive là enum `InventoryLocationType.STORAGE`). Không có
+provider thì không có signed URL để dùng; proxy qua server là lựa chọn duy
+nhất khả thi và cũng là lựa chọn an toàn hơn (quyền kiểm tra tại thời điểm
+truy cập, không phải tại thời điểm phát URL). Khảo cổ cảnh báo thêm: legacy
+lưu đường dẫn trần `/media/<tệp>` trong cột `url`, **không có checksum/
+sizeBytes**, và `deleteCaseDocument`/`deletePhoto` xoá bản ghi mà **không xoá
+tệp vật lý** → kho tệp phình vĩnh viễn.
+
+**Hệ quả:** Phần 7 phải xây hạ tầng lưu file từ đầu. Vòng đời tệp phải gắn
+với vòng đời bản ghi (hoặc có job dọn rác tường minh). Nếu sau này có
+provider hỗ trợ signed URL, đổi sang cần ADR mới + TTL ngắn tường minh.
+
+## ADR-042 — `ConsentRecord` là bản ghi riêng có snapshot nội dung + version, có REVOKED; KHÔNG phải boolean
+
+**Quyết định:** Đồng thuận y khoa là entity riêng, không phải cờ boolean trên
+`MedicalCase`. Mỗi bản ghi lưu **snapshot nội dung đã ký** + `templateVersion`
+tại thời điểm ký, nên sửa template sau này không bao giờ đổi consent đã ký.
+Trạng thái gồm cả **`REVOKED`** (kèm reason + audit), thu hồi KHÔNG được thực
+hiện bằng cách xoá bản ghi.
+
+**Vì sao:** Bất biến #26/#30/#90/#91/#101/#137/#156/#170/#176. Khảo cổ tìm ra
+một **khoảng trống nghiệp vụ thật**: legacy KHÔNG có cách ghi nhận khách rút
+lại đồng ý — cách duy nhất là xoá bản ghi (`deleteConsent`,
+`consent-actions.ts:75`), tức mất sạch bằng chứng đã từng đồng ý. (Trớ trêu,
+legacy lại có `REVOKED` cho `StaffAgreement` của nhân sự.) Pattern "snapshot
+nội dung tại thời điểm ký" đã xuất hiện độc lập ở hai chỗ trong legacy
+(`CaseConsent.title+body` dòng 946-947 có comment 'snapshot', và
+`StaffAgreement.contentSnapshot` dòng 1196) — đủ bằng chứng để chuẩn hoá
+thành một khuôn chung thay vì hai lược đồ rời.
+
+**Hệ quả:** `ConsentTemplate` là Company-scoped, bản đã dùng thì bất biến.
+Lưu ý khảo cổ: quản trị mẫu phiếu ở legacy **đang đứt** — `mau-phieu/page.tsx:17`
+gọi `requireCap("mod:mau-phieu")` nhưng chuỗi `mau-phieu` không còn trong
+`permissions.ts`, nên `ConsentTemplate` thực tế là dữ liệu chỉ-đọc: dùng
+được, không quản trị được. Phần 7 làm lại phần quản trị này cho đủ.
+
+## ADR-043 — Vật tư thủ thuật đi qua `issueStock()` của Inventory; idempotent theo `(sourceType, sourceId)`
+
+**Quyết định:** Healthcare KHÔNG có bảng tồn kho riêng. Mọi thay đổi tồn kho
+từ thủ thuật đi qua đúng `issueStock()` (Phần 6) với `sourceType` =
+`PROCEDURE_MATERIAL_USAGE`. Khoá idempotency là **`(companyId, sourceType,
+sourceId)` do server sinh**, không phải key do client gửi. Gọi lại lần hai
+là **no-op trả về movement cũ** (không báo lỗi). Sửa sai chỉ qua reversal có
+kiểm soát + audit, không xoá cứng.
+
+**Vì sao:** Bất biến #39/#40/#41/#47/#94/#96/#136/#169/#196 — riêng #39 được
+spec đánh dấu "Critical". Quyết định mở #57 để ngỏ giữa key do client sinh và
+`(sourceType, sourceId)`, và giữa no-op và báo lỗi: chọn **server-derived
+key** vì ADR-034 (Phần 6) đã cho thấy key client-suppliable mở ra sabotage
+namespace-collision (đã phải vá bằng prefix `approval:`); chọn **no-op** vì
+retry mạng là kịch bản bình thường, không phải lỗi người dùng. Khảo cổ:
+legacy tự chế idempotency bằng cờ `CaseService.bomApplied` (dòng 668, comment
+ghi rõ "tránh trừ kho 2 lần") và `MaterialUsage` bị ghi **đôi** cùng một
+`StockMovement` OUT trong cùng transaction — đúng lớp lỗi mà Phần 6 đã trả
+giá để học.
+
+**Hệ quả:** Áp dụng nguyên bài học Phần 6: khoá dòng bằng `SELECT...FOR
+UPDATE` trong transaction cho mọi check-then-write tồn kho. Có replay test
+(mục CCCLXVIII): gọi complete Procedure hai lần, tồn kho chỉ giảm một lần.
+
+## ADR-044 — Precondition của Procedure theo policy per `procedureType`; readiness thuần deterministic
+
+**Quyết định:** Điều kiện tiên quyết (case mở, consent hợp lệ, screening
+xong, có clinician được gán...) **đọc từ policy theo từng loại thủ thuật**,
+không hard-code một bộ chung. Hàm tính readiness là **pure function**: cùng
+input luôn cho cùng output, không gọi AI, không dùng random/thời gian hiện
+tại. Thiếu điều kiện thì `ready = false` **kèm danh sách lý do cụ thể**.
+
+**Vì sao:** Bất biến #24/#25/#67/#68/#69/#149/#168 và mục CVIII-CIX, CX-CXI
+(AI không được quyết định readiness, không được tự chẩn đoán). Mục CVI đòi
+dịch vụ chỉ-tư-vấn phải hoàn tất được **mà không cần** procedure/consent/vật
+tư — nên một bộ điều kiện chung cứng sẽ chặn nhầm chính luồng phổ biến nhất.
+
+**Hệ quả:** Tách module thuần `procedure-readiness.ts` (DB-free, unit test
+riêng) đúng pattern `sale-totals.ts`/`payroll-calc.ts`/`stock-balance.ts` đã
+chứng minh ở Phần 5-6. Readiness hiển thị được trên Today (mục CXCV).
+
+## ADR-045 — Không có task engine thứ hai; follow-up lâm sàng sinh `WorkItem` của Work Core
+
+**Quyết định:** `MedicalFollowUp` ghi nhận **ý nghĩa lâm sàng** của lần theo
+dõi; mọi việc cần người làm đều là `WorkItem` (Phần 4). `MedicalFollowUp`
+KHÔNG mang trường assignment/due kiểu task. Hoàn tất `WorkItem` **không bao
+giờ** tự sinh kết luận lâm sàng.
+
+**Vì sao:** Bất biến #42/#93/#104 và mục LIX/LXI/CXCII/CLXX. Đây là ADR-014
+(Phần 4) áp dụng nguyên vẹn — không tạo engine việc thứ hai. Khảo cổ cho thấy
+legacy phân mảnh miền thời gian thành **ba nguồn** cho cùng một khái niệm:
+`Appointment` (1-1 với case do `caseId @unique`), `FollowUp` (N-1), và
+`ConsultationRecord` (mốc khám 1-1) — rồi phải gộp tay ở tầng UI
+(`lich-hen/page.tsx`, `workqueue-summary.ts`). `FollowUp` tồn tại **chỉ vì**
+khiếm khuyết mô hình dữ liệu: `Appointment` bị khoá 1-1 nên không chứa nổi
+nhiều lần hẹn.
+
+**Hệ quả:** `Appointment` của Phần 5 là N-1 với `MedicalCase` (bất biến #13),
+xoá được cả lớp code gộp tay của legacy. Mốc follow-up (Day 1/3/7...) đọc từ
+cấu hình theo procedure, **không hard-code** (bất biến #45).
+
+## ADR-046 — Vai trò chuyên môn KHÔNG nằm trên `User`; quyền đến từ permission pack trên `CompanyMembership`
+
+**Quyết định:** Enum `Role` toàn cục của `User` không chứa `DOCTOR`/`NURSE`
+hay bất kỳ vai trò chuyên môn nào. `User` không mang field healthcare
+(specialty, license, chứng chỉ). Vai trò chuyên môn biểu diễn qua
+`Position`/`Assignment` (Phần 4) + **permission pack healthcare** gắn với
+`CompanyMembership`. **Không** nhánh code nào so sánh tên role
+(`role === "DOCTOR"`). Chưa tạo `HealthcareProfessionalProfile` ở Phần 7.
+
+**Vì sao:** Bất biến #17/#18/#131/#179/#180/#199/#200 và #49-#52 (pack của
+reception không chứa quyền đọc nội dung khám; nurse/doctor pack không chứa
+finance/payroll; permission healthcare không bao giờ implicit-grant
+finance/payroll). #181-#185: TELESALE/SHAREHOLDER/COLLABORATOR không mặc định
+có quyền lâm sàng; legacy ADMIN không tự thành Founder khi migrate. Quyết
+định mở #18/#20 cho phép defer `HealthcareProfessionalProfile` và license —
+defer, vì chưa có yêu cầu nghiệp vụ đã xác minh nào cần lưu số chứng chỉ.
+
+**Hệ quả:** Gỡ `"healthcare."` khỏi `RESERVED_PERMISSION_PREFIXES`
+(`registry.ts:105`) khi thêm permission thật. Lưu ý đã xác minh: hằng số này
+KHÔNG được dùng ở đâu cả (marker khai báo-thuần có chủ đích) → **sẽ không có
+gì throw nếu quên gỡ**; phải tự kiểm, đừng trông chờ nó chặn giúp.
+
+## ADR-047 — Module enablement qua bảng `CompanyModule`; `CompanyType` chỉ gợi ý, KHÔNG đổi schema
+
+**Quyết định:** Bật/tắt Healthcare theo từng Company qua bảng
+`CompanyModule` riêng (không phải cột boolean trên `Company`, không phải
+config file). Company chưa bật module thì **cả navigation lẫn direct route**
+đều bị từ chối. `CompanyType.HEALTHCARE` (đã có từ Phần 3) chỉ **gợi ý** bật
+module lúc tạo Company — **không** có nhánh code nào đổi cấu trúc model theo
+company type.
+
+**Vì sao:** Bất biến #59/#60/#61/#87/#102/#202 và mục XC-XCII. Quyết định mở
+#66/#67/#70 hỏi thẳng "kiến trúc module hiện tại đã hỗ trợ chưa" và "lưu
+trạng thái ở đâu" — **đã kiểm tra: Phần 3-6 chưa có cơ chế module toggle
+nào**, nên Phần 7 phải xây. Chọn bảng riêng thay vì cột boolean vì sẽ còn
+module khác (Phần 8 AI, Phần 9 UX) và một cột/module là mô hình không mở rộng
+được. Bất biến #60 chốt: bật/tắt module không được đổi kiến trúc tenant.
+
+**Hệ quả:** Company thường (không bật Healthcare) vẫn dùng đầy đủ CRM/Sales/
+Finance như trước — đây là điều kiện regression bắt buộc (bất biến #202,
+#205).
+
+## ADR-048 — "Chưa ghi nhận" KHÁC "ghi nhận là không"; cấm giá trị âm tính mặc định
+
+**Quyết định:** Mọi trường lâm sàng có ý nghĩa an toàn (dị ứng, tiền sử,
+chống chỉ định) phải phân biệt được ba trạng thái ở **cả model, API và UI**:
+chưa ghi nhận / ghi nhận là có / ghi nhận là không. Cấm dùng `Boolean` mặc
+định `false`. UI hiển thị "Chưa ghi nhận", không hiển thị "Không dị ứng".
+
+**Vì sao:** Bất biến #111/#148 (mục CCVII-CCIX, CCCXVII). Đây là bất biến an
+toàn lâm sàng thật, không phải chi tiết trình bày: một `allergy: Boolean
+@default(false)` khiến hệ thống khẳng định bệnh nhân không dị ứng trong khi
+thực tế chưa ai hỏi. Khảo cổ củng cố rủi ro: `ConsultationRecord.screening`
+là cột `Json` **không schema**, bất biến duy nhất là hàm `normalizeScreening`
+(`lib/consultation-sheet.ts:35-40`) và hàm này còn phải đọc tương thích ngược
+định dạng boolean cũ — tức trong DB thật đang tồn tại **ít nhất 2 thế hệ dữ
+liệu** khác nhau trong cùng một cột.
+
+**Hệ quả:** Dùng `Boolean?` nullable hoặc enum ba giá trị, không
+`@default(false)`. Dữ liệu screening chuẩn hoá thành bảng con hoặc Json **có
+version**, không Json tự do.
+
+## ADR-049 — Phần 7 KHÔNG migrate dữ liệu lâm sàng thật; chỉ fixture synthetic
+
+**Quyết định:** Phần 7 không có script/migration nào import dữ liệu lâm sàng
+legacy thật vào target. Toàn bộ test/demo chạy trên **fixture synthetic** có
+dấu hiệu nhận diện được. Code công cụ migration (nếu viết) nằm **ngoài
+runtime**; app runtime không được import module migration; adapter không bao
+giờ được cấu hình trỏ tới connection production.
+
+**Vì sao:** Bất biến #62/#117/#128/#159/#160/#161 (mục XCIV-XCV, CCXX,
+CCCXLVI, CCCXLVIII-CCCXLIX). Mục XCIV nói thẳng "Legacy data is not test
+data". Dữ liệu bệnh nhân thật là loại dữ liệu nhạy cảm nhất trong toàn hệ
+thống; đây cũng là ranh giới HARD BLOCK đã thống nhất từ đầu dự án.
+
+**Hệ quả:** Cần generator fixture lâm sàng synthetic (mục CCCL) + quy ước
+đánh dấu synthetic tường minh (quyết định mở #78). Migration thật thuộc Phần
+10, có bản đồ ID mapping riêng (bất biến #122).
+
+## ADR-050 — `MedicalCase` KHÔNG có cột tổng tiền; commercial summary luôn derived từ Sale/Finance
+
+**Quyết định:** Không có cột `totalAmount`/`paidAmount`/`debtAmount` hay bất
+kỳ tổng tiền lưu sẵn nào trên `MedicalCase`. Tóm tắt thương mại của một ca
+luôn **tính tại thời điểm query** từ `Sale`/`Payment` (Phần 5-6). Không có
+model thanh toán riêng cho lâm sàng; billing dùng Core Finance. Không model
+lâm sàng nào chứa dữ liệu lương. Quan hệ `Sale ↔ Procedure` là **N-N mềm**
+(1 Sale có thể có N Procedure, 1 Case có thể có N Sale), không ràng buộc
+unique nào chặn.
+
+**Vì sao:** Bất biến #144/#145/#151/#152/#153/#157. Khảo cổ cho bằng chứng
+đắt giá: `CaseRecord` lưu 4 cột tiền denormalize và **tính toàn vẹn phụ thuộc
+HOÀN TOÀN vào một hàm ứng dụng** — `recalc()` (`ho-so/actions.ts:59-70`) là
+nơi duy nhất giữ `totalAmount`/`paidAmount`/`debtAmount` khớp với tổng
+`CaseService.finalPrice` và `Payment.amount`; DB không có ràng buộc nào bảo
+vệ. Bất kỳ đường ghi nào quên gọi `recalc` là hồ sơ lệch tiền vĩnh viễn. Đây
+đúng là lớp lỗi mà ADR-026 (Phần 6) đã chọn tránh bằng cách tính Receivable
+derived thay vì lưu.
+
+**Hệ quả:** Giữ nguyên pattern ADR-026. Legacy cũng khoá cứng 1-1 giữa
+`CaseRecord` và `Appointment` (`caseId @unique`) rồi phải đẻ ra `FollowUp` để
+lách — Phần 7 không lặp lại: mọi quan hệ Case↔Sale↔Procedure↔Appointment đều
+để mở đúng cardinality nghiệp vụ thật.
