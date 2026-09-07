@@ -17,7 +17,7 @@ import {
   type StockMovementLike,
   type StockMovementType,
 } from "@/lib/domain/stock-balance";
-import type { InventoryItem, InventoryLocationType, StockMovementSourceType } from "@/generated/prisma";
+import type { Prisma, InventoryItem, InventoryLocationType, StockMovementSourceType } from "@/generated/prisma";
 
 // Domain service — Inventory (InventoryItem + InventoryLocation +
 // StockMovement + INVENTORY_ADJUSTMENT qua ApprovalRequest 2 người). Master
@@ -154,7 +154,7 @@ const receiveStockSchema = z.object({
   quantity: z.number().positive(),
   occurredAt: z.coerce.date().optional(),
   reason: z.string().trim().min(1).max(2000).optional(),
-  sourceType: z.enum(["SALE", "MANUAL", "ADJUSTMENT", "TRANSFER"]).optional(),
+  sourceType: z.enum(["SALE", "MANUAL", "ADJUSTMENT", "TRANSFER", "PROCEDURE_MATERIAL_USAGE"]).optional(),
   sourceId: z.string().min(1).optional(),
   idempotencyKey: z.string().min(1).max(200).optional(),
 });
@@ -574,4 +574,133 @@ export async function getLowStockItems(
     }
   }
   return results;
+}
+
+// ===== Phần 7 — điểm nối cho Healthcare (ADR-043) =====
+
+export type IssueStockTxParams = {
+  companyId: string;
+  inventoryItemId: string;
+  locationId: string;
+  quantity: number;
+  occurredAt?: Date;
+  reason?: string;
+  sourceType: StockMovementSourceType;
+  sourceId: string;
+  /** Do SERVER sinh, không nhận từ client (bài học ADR-034). */
+  idempotencyKey: string;
+  actorUserId: string;
+  allowNegative?: boolean;
+};
+
+/**
+ * Trừ kho trong CÙNG tx được truyền vào, KHÔNG tự kiểm permission.
+ *
+ * Vì sao cần bản riêng thay vì gọi `issueStock`: `issueStock` gác bằng
+ * `inventory.issue`, nhưng người hoàn tất thủ thuật là bác sĩ — pack
+ * HEALTHCARE_DOCTOR cố ý KHÔNG có `inventory.issue` (cho quyền đó nghĩa là
+ * bác sĩ xuất được kho tuỳ ý, quá rộng). Caller (procedure-service) đã tự
+ * kiểm `healthcare.procedure.perform` rồi, nên ở đây chỉ còn phần ghi.
+ * Cùng pattern với `createExpenseRecordTx` của Phần 6 (payroll-service ghi
+ * Expense mà không cần `finance.expense.create`).
+ *
+ * GỌI TỪ ĐÂU: chỉ domain service đã tự kiểm quyền của chính nó. KHÔNG export
+ * ra Server Action.
+ *
+ * Idempotent theo `idempotencyKey`: gọi lại lần 2 trả về movement cũ,
+ * KHÔNG trừ kho lần nữa và KHÔNG báo lỗi (bất biến #39 — spec đánh dấu
+ * "Critical"; retry mạng là kịch bản bình thường, không phải lỗi người dùng).
+ */
+export async function issueStockTx(tx: Prisma.TransactionClient, params: IssueStockTxParams) {
+  const existing = await tx.stockMovement.findFirst({
+    where: { companyId: params.companyId, idempotencyKey: params.idempotencyKey },
+  });
+  if (existing) return existing;
+
+  // Khoá row rồi tính số dư NGAY TRONG tx — cùng lý do đã ghi ở issueStock:
+  // hai lần trừ kho đồng thời cùng đọc một baseline sẽ cùng pass check.
+  await tx.$queryRaw`SELECT id FROM "InventoryItem" WHERE id = ${params.inventoryItemId} FOR UPDATE`;
+
+  const movements = await tx.stockMovement.findMany({
+    where: {
+      companyId: params.companyId,
+      inventoryItemId: params.inventoryItemId,
+      locationId: params.locationId,
+    },
+    select: { type: true, quantity: true },
+  });
+  const balance = calculateStockBalance(toMovementLikes(movements));
+  if (
+    !params.allowNegative &&
+    wouldResultInNegativeBalance(balance, { type: "OUT", quantity: params.quantity })
+  ) {
+    throw new Error(
+      `Không đủ tồn kho: còn ${balance}, cần ${params.quantity}. Không tự động cho âm kho.`,
+    );
+  }
+
+  const movement = await tx.stockMovement.create({
+    data: {
+      companyId: params.companyId,
+      inventoryItemId: params.inventoryItemId,
+      locationId: params.locationId,
+      type: "OUT",
+      quantity: params.quantity,
+      occurredAt: params.occurredAt,
+      reason: params.reason,
+      sourceType: params.sourceType,
+      sourceId: params.sourceId,
+      idempotencyKey: params.idempotencyKey,
+      actorUserId: params.actorUserId,
+    },
+  });
+
+  await recordAudit(tx, {
+    actorUserId: params.actorUserId,
+    action: AUDIT_ACTIONS.STOCK_ISSUED,
+    targetType: "StockMovement",
+    targetId: movement.id,
+    companyId: params.companyId,
+    metadata: { sourceType: params.sourceType, sourceId: params.sourceId },
+  });
+
+  return movement;
+}
+
+/** Hoàn kho cho một lần trừ đã ghi (reversal, không xoá cứng — bất biến #44/#96). */
+export async function reverseStockIssueTx(
+  tx: Prisma.TransactionClient,
+  params: Omit<IssueStockTxParams, "allowNegative"> & { reason: string },
+) {
+  const existing = await tx.stockMovement.findFirst({
+    where: { companyId: params.companyId, idempotencyKey: params.idempotencyKey },
+  });
+  if (existing) return existing;
+
+  const movement = await tx.stockMovement.create({
+    data: {
+      companyId: params.companyId,
+      inventoryItemId: params.inventoryItemId,
+      locationId: params.locationId,
+      type: "IN",
+      quantity: params.quantity,
+      occurredAt: params.occurredAt,
+      reason: params.reason,
+      sourceType: params.sourceType,
+      sourceId: params.sourceId,
+      idempotencyKey: params.idempotencyKey,
+      actorUserId: params.actorUserId,
+    },
+  });
+
+  await recordAudit(tx, {
+    actorUserId: params.actorUserId,
+    action: AUDIT_ACTIONS.STOCK_RECEIVED,
+    targetType: "StockMovement",
+    targetId: movement.id,
+    companyId: params.companyId,
+    metadata: { reversalOf: params.sourceId, reason: params.reason },
+  });
+
+  return movement;
 }
