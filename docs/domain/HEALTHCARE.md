@@ -50,14 +50,15 @@ chối. Hai cổng không thay thế nhau.
 
 | Bất biến | Ở đâu |
 |---|---|
-| Bản ghi lâm sàng FINAL là bất biến, sửa chỉ qua addendum | ADR-039, `CONSULTATION.md` |
+| Bản ghi lâm sàng FINAL là bất biến, sửa chỉ qua addendum | ADR-039, `consultation-service.ts` |
 | Không cascade delete vào lịch sử lâm sàng (0 `ON DELETE CASCADE`) | ADR-040, đã verify trong migration SQL |
 | "Chưa ghi nhận" ≠ "ghi nhận là không" | ADR-048, `ScreeningAnswer?` nullable |
-| Consent có snapshot + version + REVOKED | ADR-042, `CONSENT.md` |
-| Vật tư đi qua `issueStock()`, idempotent | ADR-043, `PROCEDURE.md` |
+| Consent có snapshot + version + REVOKED | ADR-042, `consent-service.ts` |
+| Vật tư đi qua `issueStock()`, idempotent | ADR-043, `procedure-service.ts` |
 | Readiness deterministic, AI không quyết định | ADR-044, `procedure-readiness.ts` |
 | Follow-up không phải task engine thứ hai | ADR-045 |
 | Case không có cột tổng tiền | ADR-050 |
+| Dữ liệu lâm sàng KHÔNG mã hoá field-level riêng, dựa platform/DB encryption-at-rest | ADR-052 |
 
 ## Customer ≠ Patient record (ADR-037)
 
@@ -83,6 +84,35 @@ cần dữ liệu y tế ổn định xuyên suốt mọi Case tách khỏi `Cus
   hình ảnh, nhà thuốc, nội trú, quản lý giường, bảo hiểm, chứng nhận EMR —
   spec đánh dấu defer tường minh.
 - Event sourcing / Kafka / form builder động — spec cấm tường minh.
+
+## Concurrency — cùng bài học Phần 6, áp dụng lại (và review lại) ở Phần 7
+
+Mọi hàm "đọc trạng thái rồi ghi" trên entity Healthcare khoá dòng bằng
+`SELECT...FOR UPDATE` + đọc lại `fresh` bên trong `db.$transaction` trước khi
+ghi. Adversarial review sau checkpoint Phần 6 (không phải lúc code lần đầu)
+tìm ra **3 cụm P0 thật** nơi mẫu này bị thiếu ở các hàm chị-em cùng entity với
+hàm đã có lock đúng — `finalizeConsultation` có lock nhưng
+`updateDraftConsultation`/`recordScreeningItem` thì không (có thể ghi đè nội
+dung một bản ghi vừa FINAL); `completeProcedure` có lock nhưng
+`startProcedure`/`cancelProcedure` thì không; `recordFollowUpOutcome`/
+`closeMedicalFollowUp`/`updateFollowUpStatus` hoàn toàn không có lock. Đã sửa
+cả 3 cụm + `updateMedicalCase`/`reopenMedicalCase`/`reverseProcedureMaterial`
+(P1/P2 cùng root cause). Regression test bắn THẬT 2 lệnh song song vào cùng
+Postgres: `tenant-isolation-part7.itest.ts` mục "Concurrency — race condition
+regression". **Bài học rút ra**: "áp dụng pattern ở 1 hàm" không tự động lan
+sang các hàm khác cùng entity — mỗi hàm ghi phải tự kiểm tra, không suy diễn
+từ hàm cạnh nó.
+
+## PHI redaction — field liền kề cũng phải gate, không chỉ bảng chính
+
+`MedicalCase.chiefComplaint` là nội dung lâm sàng thật (lý do khám), cùng
+nhóm nhạy cảm với SOAP của `ClinicalConsultation` (ADR-052) — nhưng nằm trên
+model mà preset generic OWNER/ADMIN/MANAGER và pack RECEPTION đều có quyền
+`healthcare.case.view`. Review tìm ra field này lộ nguyên vẹn qua
+`getMedicalCaseList`/`getMedicalCaseDetail` cho các actor đó dù họ cố tình
+không được cấp `healthcare.consultation.view`. Đã sửa: `redactChiefComplaint`
+trong `medical-case-service.ts` set về `null` khi actor thiếu quyền đọc nội
+dung lâm sàng — sửa tại nguồn (domain service), không phải ở từng nơi gọi.
 
 ## Audit
 

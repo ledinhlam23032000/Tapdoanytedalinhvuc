@@ -1128,6 +1128,50 @@ Và giữ #99: membership không ACTIVE thì resolver trả về set rỗng trư
 **Hệ quả:** 6 unit test ràng buộc **âm tính** trong
 `src/lib/permissions/__tests__/presets.test.ts` — loại bất biến "KHÔNG được
 chứa X" rất dễ trôi khi ai đó tiện tay thêm quyền vào pack, và không test nào
+
+## ADR-052 — Dữ liệu lâm sàng KHÔNG dùng application-level field encryption riêng; dựa vào encryption-at-rest của platform/DB/storage
+
+**Quyết định:** `MedicalCase.chiefComplaint`, `ClinicalConsultation.{subjective,
+objective,assessment,plan}`, `ClinicalConsultationAddendum.content`,
+`ClinicalScreeningItem.note`, `MedicalFollowUp.note` và mọi text field lâm
+sàng khác **KHÔNG** áp dụng mã hoá tầng application (kiểu AES-256-GCM tự viết
+như `Customer.phoneCiphertext`, ADR-023 Phần 5). Bù lại, dữ liệu này trông
+cậy vào encryption-at-rest ở tầng nền tảng/database/storage (managed Postgres
+disk-level encryption khi deploy production; tương tự cho storage nhị phân
+của `ClinicalPhoto`/`ClinicalFile`, ADR-041).
+
+**Vì sao:** Bất biến CCXVIII (`PART7_SPEC_DIGEST.md:1556`) ghi rõ "Dùng best
+practice mã hóa sẵn có của nền tảng/database/storage. **Cấm tự phát minh cơ
+chế mã hóa riêng**" — ngược hoàn toàn với việc nhân bản pattern
+`phoneCiphertext`/`phoneHash` cho field lâm sàng. Tự viết thêm một tầng mã
+hoá field-level thứ hai (khác cơ chế, khác key management với Phần 5) đúng
+là loại "tự phát minh cơ chế mã hóa riêng" bị cấm, và còn kéo theo chi phí
+thật: mất khả năng lọc/tìm kiếm theo nội dung lâm sàng ở DB, thêm một bề mặt
+quản lý key mới không được spec yêu cầu.
+
+**Bù đắp ở lớp khác (đã verify, không phải giả định):** 18 healthcare
+permission key + 4 `PermissionPack` (ADR-051) — preset generic OWNER/ADMIN/
+MANAGER chỉ có `healthcare.case.view`, KHÔNG có
+`healthcare.consultation.view`/`.photo.view`/... (đúng bất biến CXXXI, cấm
+Founder/role Ecosystem-tier tự động đọc PHI). `companyId` NOT NULL trên mọi
+entity Healthcare, cấm suy Company qua Customer (ADR-038). Grep xác nhận:
+không `console.log`/`logger.*` nào trong `src/lib/domain/healthcare/`,
+`src/app/api/healthcare/` chạm vào field lâm sàng (đúng CXXIV, PHI không lọt
+log kỹ thuật); không `unstable_cache`/`revalidateTag`/`cache()` nào dùng cho
+dữ liệu clinical (đúng CXXXVII, không có cache dùng chung làm lộ PHI chéo
+Company/actor — hiện tại đơn giản là chưa cache gì, an toàn theo mặc định).
+
+**Hệ quả:** Môi trường dev/test hiện tại (Postgres Docker, cổng 5442) KHÔNG
+có disk-level encryption — chấp nhận được cho local/test theo đúng CCXIX
+("Backup Phần 7 chỉ làm cho môi trường test, production thuộc Phần 10"),
+cùng logic áp dụng cho encryption-at-rest. **Backlog bắt buộc cho Phần 10**:
+xác nhận managed Postgres/storage provider thật có bật encryption-at-rest
+(vd RDS/Cloud SQL encryption hoặc volume-level LUKS/dm-crypt tự host) TRƯỚC
+khi `CUTOVER_APPROVAL_REQUIRED` — ghi vào security risk list của checkpoint
+Phần 7. Nếu sau này có yêu cầu nghiệp vụ thật cần tìm kiếm-mù (searchable
+encryption) hoặc chia sẻ dữ liệu lâm sàng ra ngoài biên DB tin cậy, quyết
+định lại bằng ADR mới — không tự ý quay lại pattern field-level encryption
+khi chưa có use case đó.
 khác bắt được. Có thêm test "mọi permission trong pack đều là key hợp lệ
 trong registry" để pack không thể chứa key chết.
 

@@ -171,6 +171,28 @@ const registerClinicalPhotoSchema = z.object({
  * Trả về `{ id }` — Server Action không cần (và không được) nhận nguyên object
  * Prisma kèm storageKey.
  */
+/**
+ * Chỉ kiểm quyền + case-scope, KHÔNG ghi gì. Route upload dùng hàm này để
+ * gate TRƯỚC KHI ghi file xuống đĩa.
+ *
+ * P2 fix (adversarial review Phần 7): trước đây route ghi file trước, chỉ
+ * `registerClinicalPhoto` (chạy SAU khi đã `writeFile`) mới thật sự kiểm
+ * quyền — bất kỳ actor nào đã đăng nhập (kể cả không phải thành viên Company
+ * đó, không có `healthcare.photo.manage`, hoặc Company chưa bật module Y tế)
+ * đều có thể POST liên tục để ghi rác tới 25MB/lần xuống đĩa trước khi bị từ
+ * chối ở bước đăng ký metadata — vector DoS/tốn đĩa do "ghi trước, authorize
+ * sau", ngược triết lý "check trước side-effect" mà ADR-041 áp dụng cho
+ * route đọc.
+ */
+export async function authorizeClinicalPhotoUpload(
+  actorId: string,
+  input: { companyId: string; medicalCaseId: string },
+) {
+  const { company } = await requireCompanyContextForActor(actorId, input.companyId, "healthcare.photo.manage");
+  await assertHealthcareModuleEnabled(company.id);
+  await assertSameCompanyMedicalCase(company.id, input.medicalCaseId);
+}
+
 export async function registerClinicalPhoto(actorId: string, input: z.input<typeof registerClinicalPhotoSchema>) {
   const parsed = registerClinicalPhotoSchema.parse(input);
   const { actor, company } = await requireCompanyContextForActor(actorId, parsed.companyId, "healthcare.photo.manage");

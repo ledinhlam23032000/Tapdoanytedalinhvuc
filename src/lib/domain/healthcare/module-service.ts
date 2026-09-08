@@ -136,6 +136,17 @@ export async function grantPermissionPack(actorId: string, input: z.input<typeof
     "company.members.manage",
   );
 
+  // P1 fix (red-team CONFIRMED — vi phạm bất biến #130/CCXLVI "không ai tự
+  // nâng quyền cho chính mình"): preset OWNER/COMPANY_ADMIN có
+  // company.members.manage nhưng KHÔNG có quyền lâm sàng nào (ADR-051 —
+  // "bác sĩ không phải một tier quản lý"). Thiếu guard này, chính actor có
+  // thể tự gán HEALTHCARE_DOCTOR cho mình rồi đọc PHI đầy đủ mà không qua
+  // phê duyệt của ai — pattern đã có sẵn cho thao tác tương tự
+  // (company-service.ts:updateCompanyMemberRole) nhưng bị bỏ sót ở đây.
+  if (parsed.userId === actor.id) {
+    throw new AuthorizationError("Không thể tự gán gói quyền chuyên môn cho chính mình.");
+  }
+
   const membership = await db.companyMembership.findUnique({
     where: { companyId_userId: { companyId: company.id, userId: parsed.userId } },
   });

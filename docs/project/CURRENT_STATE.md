@@ -1,9 +1,9 @@
 # Current State
 
-Cập nhật lần cuối: cuối Phần 6 (Finance + Payment + Receivable + Ledger +
-Payroll + Commission + Inventory).
+Cập nhật lần cuối: cuối Phần 7 (Healthcare Vertical — MedicalCase +
+Consultation + Procedure + Consent + ClinicalPhoto + MedicalFollowUp).
 
-## Stack (ADR-006 + Phần 3/4/5/6 bổ sung)
+## Stack (ADR-006 + Phần 3-7, không đổi)
 
 Next.js 16.3.3 (App Router, Turbopack) + React 19.2.8 + TypeScript (strict) +
 Tailwind CSS v4 + Prisma 7.9.1 (`@prisma/adapter-pg`, client generate ra
@@ -11,11 +11,10 @@ Tailwind CSS v4 + Prisma 7.9.1 (`@prisma/adapter-pg`, client generate ra
 (Docker, local dev port **5442**) + Vitest 4 (unit + integration 2 lane,
 salvage convention ZenithTasks) + `jose` (JWT) + `bcryptjs` (password hash,
 cost 12) + `tsx` (chạy script TypeScript như `bootstrap-founder.ts`) + Node
-`crypto` (AES-256-GCM cho SĐT, Phần 5). Không đổi gì ở Phần 6 — đúng ADR-006
-"không đổi stack đã chứng minh". Điểm mới duy nhất ở tầng kỹ thuật: mọi
-domain service tiền/kho giờ dùng pattern `SELECT...FOR UPDATE` bên trong
-`db.$transaction` cho check-then-write (Postgres READ COMMITTED không tự
-chặn race) — không phải thư viện/dependency mới, chỉ là pattern code.
+`crypto` (AES-256-GCM cho SĐT, Phần 5; **KHÔNG** dùng field-level cho dữ liệu
+lâm sàng Phần 7 — xem ADR-052) + Node `fs/promises` (lưu file ảnh lâm sàng
+local, `.data/clinical-photos/`, ADR-041 — chưa có storage provider ngoài).
+Không đổi gì ở tầng dependency Phần 7 — đúng ADR-006.
 
 ## Lệnh quan trọng
 
@@ -23,124 +22,113 @@ chặn race) — không phải thư viện/dependency mới, chỉ là pattern c
 docker compose up -d              # khởi động Postgres local (port 5442)
 npm install                       # cài dependencies (tự chạy `prisma generate`)
 npx prisma migrate dev            # tạo/áp migration mới khi đổi schema
+npx prisma migrate status         # CHỈ báo migration đã chạy — KHÔNG đủ để tin schema/DB đồng bộ (bài học Phần 7)
 npm run bootstrap:founder         # tạo Ecosystem + Founder đầu tiên (đọc env BOOTSTRAP_*)
-npm run test                      # vitest unit (không cần DB) — 64/64
-npm run test:integration          # vitest integration (*.itest.ts — CẦN Postgres thật) — 133/133
+npm run test                      # vitest unit (không cần DB) — 79/79
+npm run test:integration          # vitest integration (*.itest.ts — CẦN Postgres thật) — 159/159
 npx tsc --noEmit                  # typecheck
 npx eslint .                      # lint
-npx next build                    # build production
+npx next build                    # build production (cũng sinh lại .next/types nếu bị xoá — cần thiết cho typed-route LayoutProps)
 ```
 
 `.env` (không commit) cần `DATABASE_URL`, `AUTH_SECRET`
-(`openssl rand -base64 48`), `PHONE_ENC_KEY` (32 byte base64, Phần 5 — xem
-`.env.example`), và `BOOTSTRAP_FOUNDER_EMAIL`/`BOOTSTRAP_FOUNDER_PASSWORD`/
+(`openssl rand -base64 48`), `PHONE_ENC_KEY` (32 byte base64, Phần 5), và
+`BOOTSTRAP_FOUNDER_EMAIL`/`BOOTSTRAP_FOUNDER_PASSWORD`/
 `BOOTSTRAP_ECOSYSTEM_CODE`/`BOOTSTRAP_ECOSYSTEM_NAME` (chỉ cần khi chạy
-`bootstrap:founder`). Không có biến env mới ở Phần 6.
+`bootstrap:founder`). Không có biến env mới ở Phần 7.
 
-## Schema hiện tại (Phần 3 + Phần 4 + Phần 5 + Phần 6)
+## Schema hiện tại (Phần 3-7, 10 migration tổng)
 
-`prisma/schema.prisma`: Phần 3 — `User`, `Ecosystem`, `EcosystemMembership`,
-`Company`, `CompanyMembership`, `AuditEvent`. Phần 4 — `OrganizationUnit`,
-`Position`, `Assignment`, `WorkItem`, `Project`, `ProjectMembership`. Phần 5
-— `CustomerSource`, `Lead`, `Customer`, `CustomerInteraction`,
-`Appointment`, `CatalogItem`, `Sale`, `SaleLine`. Phần 6 (mới) — `Payment`,
-`Expense`, `LedgerEntry`, `PayrollProfile`, `PayrollRun`, `PayrollItem`,
+Phần 3 — `User`, `Ecosystem`, `EcosystemMembership`, `Company`,
+`CompanyMembership`, `AuditEvent`. Phần 4 — `OrganizationUnit`, `Position`,
+`Assignment`, `WorkItem`, `Project`, `ProjectMembership`. Phần 5 —
+`CustomerSource`, `Lead`, `Customer`, `CustomerInteraction`, `Appointment`,
+`CatalogItem`, `Sale`, `SaleLine`. Phần 6 — `Payment`, `Expense`,
+`LedgerEntry`, `PayrollProfile`, `PayrollRun`, `PayrollItem`,
 `ApprovalRequest`, `CommissionRule`, `CommissionCalculation`,
-`InventoryLocation`, `InventoryItem`, `StockMovement`. Migration:
-`20260829235717_ecosystem_company_identity_foundation` +
-`20260830092334_organization_work_project_foundation` +
-`20260830124601_crm_sales_appointment_customer_operations` +
-`20260831034101_finance_payroll_commission_inventory` +
-`20260831034500_fix_stock_adjustment_direction` +
-`20260831035000_approval_request_payload` +
-`20260831040000_inventory_item_reorder_level` (7 migration tổng).
+`InventoryLocation`, `InventoryItem`, `StockMovement`. Phần 7 (mới) —
+`MedicalCase`, `HealthcareAppointmentContext`, `ClinicalConsultation`,
+`ClinicalConsultationAddendum`, `ClinicalScreeningItem`, `Procedure`,
+`ProcedureMaterialUsage`, `ConsentTemplate`, `ConsentRecord`, `ClinicalPhoto`,
+`MedicalFollowUp`, `CompanyMembershipPack`. Migration Phần 7:
+`20260907103725_healthcare_vertical`, `20260907104540_healthcare_permission_packs`,
+`20260908062738_catalog_item_consultation_only_flag` (thêm
+`CatalogItem.isConsultationOnly` — tạo muộn, sau khi phát hiện schema drift
+khi review, xem CURRENT_WAVE/LATEST checkpoint).
 
-## Đã implement thật (Phần 6)
+## Đã implement thật (Phần 7)
 
-- **Domain service:** `payroll-calc.ts`/`commission-calc.ts`/
-  `stock-balance.ts` (3 module tính thuần, DB-free, unit test riêng —
-  cùng pattern `sale-totals.ts` Phần 5), `approval-service.ts`
-  (`ApprovalRequest` 2-người-duyệt dùng chung), `finance-service.ts`,
-  `payroll-service.ts`, `commission-service.ts`, `inventory-service.ts`.
-  `scope-guards.ts` mở rộng 7 assert cross-company mới.
-- **Server Actions:** `finance-actions.ts`, `payroll-actions.ts`,
-  `commission-actions.ts`, `inventory-actions.ts` — thin wrapper, luôn trả
-  `{id}` hoặc void (không trả Decimal-bearing object — bài học Phần 5).
-- **UI:** `/c/[code]/{finance,payroll,payroll/profiles,
-  payroll/commission-rules,inventory,inventory/adjustments}` + trang chi
-  tiết — nav cập nhật (3 top-level item mới: Tài chính/Lương/Tồn kho).
-  `sales/[saleId]/page.tsx` tích hợp thêm Receivable/Payment + Commission
-  section.
-- **Docs:** `docs/domain/FINANCE.md`, `PAYROLL.md`, `COMMISSION.md`,
-  `INVENTORY.md`; ADR-024 đến ADR-035.
+- **Domain service:** `src/lib/domain/healthcare/{medical-case,consultation,
+  procedure,consent,clinical-photo,followup,module}-service.ts` +
+  `procedure-readiness.ts` (hàm thuần, DB-free). Mọi hàm ghi trạng thái đã có
+  `SELECT...FOR UPDATE` + đọc lại trong transaction trước khi ghi (bài học
+  Phần 6, áp dụng lại và review lại ở Phần 7 — xem mục Concurrency,
+  `docs/domain/HEALTHCARE.md`).
+- **Server Actions:** `healthcare-actions.ts` (27 action, thin wrapper).
+- **UI:** `/c/[code]/healthcare` + `/[medicalCaseId]` (5 section: Consultation/
+  Procedure/Consent/Photo/FollowUp) + `/settings` (module toggle + permission
+  pack), tab "Hồ sơ chuyên môn" trên trang Customer, upload ảnh thật qua
+  `api/healthcare/photos/*`.
+- **Permission:** 18 key `healthcare.*` (78 tổng) + 4 `PermissionPack`.
+  `RESERVED_PERMISSION_PREFIXES` giờ rỗng.
+- **Docs:** `docs/domain/HEALTHCARE.md`; ADR-036 đến ADR-052.
 
-## Đã verify (Phần 6)
+## Đã verify (Phần 7)
 
-- **Unit test:** 64/64 PASS (44 cũ + `payroll-calc.test.ts` +
-  `commission-calc.test.ts` + `stock-balance.test.ts`, gồm test hồi quy
-  rounding + double-count hoa hồng).
-- **Integration test:** 133/133 PASS — 99 cũ (Phần 3+4+5) + 34 mới
-  (`tenant-isolation-part6.itest.ts`): cross-company FK injection, vòng đời
-  PayrollRun đầy đủ (kể cả live same-actor-denial assertion), Commission
-  double-count prevention, Inventory movement + âm kho + duyệt điều chỉnh,
-  Suspended-Company chặn ghi, VÀ describe block riêng cho concurrency dùng
-  `Promise.allSettled` bắn thật 2 lệnh song song vào cùng Postgres instance.
+- **Unit test:** 79/79 PASS.
+- **Integration test:** 159/159 PASS (156 + 3 test concurrency mới
+  `tenant-isolation-part7.itest.ts` mục "Concurrency — race condition
+  regression"): cross-company FK injection, bất biến FINAL/addendum/
+  no-cascade, PHI permission gating, 3 test bắn thật 2 lệnh song song vào
+  cùng Postgres.
 - **Anti-pattern search:** sạch.
-- **Adversarial code review (5 subagent độc lập — tăng từ 3 ở Phần 5 vì
-  đây là domain HIGH/VERY HIGH RISK):** `docs/security/RED_TEAM_CODE_REVIEW_PART6.md`.
-  Tìm **4 P0 thật** (đều cùng 1 root cause class — thiếu `SELECT...FOR
-  UPDATE` cho check-then-write trên tiền/kho): `calculatePayrollRun`
-  netAmount hand-roll mất bonus/deduction, `recordPayment` race
-  overpayment, `finalizePayrollRun` race double-pay, `issueStock`/
-  `transferStock` race âm kho. Cộng nhiều P1/P2 (rounding hoa hồng,
-  cross-tenant contributor gap, PII over-fetch lặp lại bug class Phần 5,
-  idempotencyKey namespace-collision, adjustment APPROVED biến mất khỏi
-  UI). Không còn P0/P1 mở sau khi sửa.
-- **2 lớp bug thật phát hiện ngoài review**: (1) qua browser-test —
-  `effectiveFrom` PayrollProfile mặc định timestamp chính xác gây same-day
-  exclusion; (2) qua re-verify integration test TRƯỚC khi chốt checkpoint —
-  bản vá (1) dùng giờ địa phương thay vì UTC để truncate, làm lệch ngày
-  effectiveFrom tường minh trên máy chạy timezone lùi sau UTC (đã sửa sang
-  `Date.UTC`), kéo theo phát hiện 1 test dùng `findFirst` không filter gặp
-  fixture-bleed (đã sửa sang `findMany` + `.find()`). Chi tiết đầy đủ:
-  `docs/checkpoints/LATEST.md`.
-- **Browser journey thật (3 journey bắt buộc):** Finance/Payment (Sale
-  CONFIRMED có sẵn → ghi Payment → Receivable derived đúng); Payroll
-  two-person-approval (đầy đủ vòng đời DRAFT→FINALIZED, live-test cùng actor
-  bị chặn duyệt lần 2, actor khác duyệt thành công, Expense+LedgerEntry tự
-  sinh đúng); Inventory two-person-approval (nhập/xuất/điều chỉnh kho,
-  cùng live-test same-actor-denial, thực thi điều chỉnh đã duyệt, số dư
-  đúng 75).
-- `npx tsc --noEmit`, `npx eslint .`, `npx next build` — sạch (chạy lại
-  toàn bộ SAU khi sửa cả 3 bug ở trên, không chỉ trước review).
-- **Fresh-install test:** DB trống riêng, `prisma migrate deploy` áp cả 7
-  migration sạch, `bootstrap:founder` chạy thành công — xoá DB tạm.
+- **Adversarial code review (4 agent độc lập, chạy SAU khi phần lớn code đã
+  viết — khác Phần 3-6):** `docs/security/RED_TEAM_CODE_REVIEW_PART7.md`.
+  **3 P0 thật** (cùng root cause Phần 6 — thiếu `SELECT...FOR UPDATE`):
+  `updateDraftConsultation`/`recordScreeningItem` đua với `finalizeConsultation`;
+  `startProcedure`/`cancelProcedure` đua với `completeProcedure`;
+  `recordFollowUpOutcome` đua với chính nó. Cộng 2 P1 concurrency
+  (`updateMedicalCase`, `closeMedicalFollowUp`/`updateFollowUpStatus`), 1 P1
+  rò PHI (`MedicalCase.chiefComplaint` lộ cho actor thiếu
+  `healthcare.consultation.view`), vài P2 (upload route ghi file trước khi
+  kiểm quyền, Prisma P2002 thô). Không còn P0/P1 mở sau khi sửa.
+- **Schema/DB drift phát hiện qua re-verify** (không phải review nội dung):
+  `CatalogItem.isConsultationOnly` có trong `schema.prisma` + code dùng
+  nhưng CHƯA có migration — `prisma migrate status` báo "up to date" một
+  cách sai lệch. Đã tạo migration còn thiếu + cập nhật test suite đang dùng
+  cách CŨ (text-matching `procedureType`) sang cách MỚI (`CatalogItem.isConsultationOnly`).
+- **Browser journey thật (trọng tâm: PHI redaction):** bác sĩ tạo + chốt
+  phiếu khám với "Lý do khám" nhạy cảm → Founder (không có pack lâm sàng) mở
+  lại đúng hồ sơ: "Lý do khám" biến mất, "Phiếu khám" hiện đúng rỗng dù có
+  1 phiếu FINAL thật.
+- `npx tsc --noEmit`, `npx eslint .`, `npx next build` — sạch.
+- **Fresh-install test:** DB trống riêng, `prisma migrate deploy` áp cả 10
+  migration sạch, `bootstrap:founder` chạy thành công.
 
 ## Known issue / quyết định kỹ thuật đáng chú ý
 
-- **`allowedDevOrigins`** phải thêm vào `next.config.ts` — kế thừa từ Phần
-  4, vẫn đúng.
-- `npm audit`: 3 lỗi "high" kế thừa từ Prisma CLI 7.x tooling — theo dõi,
-  không block.
-- `AuditEvent`/`LedgerEntry`/`StockMovement` chưa có DB-level trigger chống
-  UPDATE/DELETE trực tiếp — bất biến hiện chỉ ở tầng application (domain
-  service là con đường ghi DUY NHẤT).
-- **Mọi so sánh/truncate ngày dùng để xác định hiệu lực (effective-dated
-  entity, period boundary) PHẢI dùng `getUTC*`/`Date.UTC`, không dùng giờ
-  địa phương** — bài học Phần 6 (bug Lớp 2), vì `z.coerce.date()` luôn parse
-  date-only string thành UTC midnight.
-- **Test integration dùng `beforeAll` (không `beforeEach`) có rủi ro
-  fixture-bleed thật giữa các test trong cùng file** — không dùng
-  `findFirst` không filter khi entity liên quan có thể có nhiều bản ghi hợp
-  lệ cho cùng điều kiện.
-- **`phoneHash` (SHA-256, không salt)** trên keyspace SĐT VN nhỏ — chấp
-  nhận cho MVP, cần salt/HMAC nếu Phần 7+ mở API/export dùng field này.
+- (kế thừa Phần 6 — `allowedDevOrigins`, `npm audit` 3 high từ Prisma CLI
+  tooling, chưa DB trigger cho AuditEvent/LedgerEntry/StockMovement, mọi so
+  sánh ngày dùng `getUTC*`, `beforeAll` fixture-bleed risk, `phoneHash`
+  không salt.)
+- **`npx prisma migrate status` "up to date" KHÔNG đủ bằng chứng schema/DB
+  đồng bộ** — nó chỉ so migration đã chạy, không diff field thật. Luôn chạy
+  lại full test suite sau khi đổi schema (bài học Phần 7).
+- **Dữ liệu lâm sàng KHÔNG có field-level encryption riêng** (ADR-052,
+  khác `Customer.phoneCiphertext`) — dựa vào platform/DB encryption-at-rest,
+  bắt buộc xác nhận đã bật trước cutover Phần 10.
+- **Field có thể nhạy cảm hơn permission `.view` của model cha** — luôn audit
+  riêng từng field khi thêm entity mới, không suy an toàn từ việc record đã
+  qua permission check (bài học `chiefComplaint`).
+- **Mỗi hàm ghi trạng thái trên 1 entity phải tự có lock, không suy từ hàm
+  cạnh nó** — cả 3 P0 Phần 7 đều là "1 hàm có `FOR UPDATE` đúng, hàm chị-em
+  cùng entity thì không".
 
-## KHÔNG có trong Phần 6 (đúng phạm vi)
+## KHÔNG có trong Phần 7 (đúng phạm vi)
 
-Invoice/hoá đơn điện tử, AccountsPayable, đa tiền tệ, kế toán kép, định giá
-tồn kho FIFO/LIFO, barcode/serial/lot tracking, Purchase Order/Supplier,
-Healthcare, Digital COO/AI proactive, dashboard/reporting engine, Zalo/SMS,
-payment integration, email invitation service, role builder UI, break-glass
-access, user impersonation, Milestone/Checklist riêng cho Project,
-OrganizationUnit move/reparent UI, mọi mục deferred Phần 3/4/5.
+`HealthcareProfile`, chứng chỉ hành nghề riêng, patient portal, đặt lịch
+online, đơn thuốc điện tử, xét nghiệm, chẩn đoán hình ảnh, nhà thuốc, nội
+trú, quản lý giường, bảo hiểm, EMR certification, signed URL cho file lâm
+sàng (chờ storage provider thật), `MedicalFollowUpAddendum` (chưa có use
+case thật), migrate dữ liệu lâm sàng thật (ADR-049, thuộc Phần 10), mọi mục
+deferred Phần 3-6.

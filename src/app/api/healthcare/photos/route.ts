@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { getCurrentActor } from "@/lib/auth/current-actor";
 import {
   registerClinicalPhoto,
+  authorizeClinicalPhotoUpload,
   CLINICAL_PHOTO_ALLOWED_MIME_TYPES,
   CLINICAL_PHOTO_MAX_BYTES,
 } from "@/lib/domain/healthcare/clinical-photo-service";
@@ -57,6 +58,17 @@ export async function POST(request: Request) {
   }
   if (file.size > CLINICAL_PHOTO_MAX_BYTES) {
     return NextResponse.json({ error: "Ảnh vượt quá dung lượng cho phép (25MB)." }, { status: 400 });
+  }
+
+  // Kiểm quyền TRƯỚC KHI ghi bất kỳ byte nào xuống đĩa (P2 fix, xem docstring
+  // authorizeClinicalPhotoUpload) — registerClinicalPhoto vẫn tự kiểm lại đầy
+  // đủ bên dưới, đây chỉ là gate sớm để side-effect (ghi file) không chạy
+  // trước khi biết actor có quyền.
+  try {
+    await authorizeClinicalPhotoUpload(actor.id, { companyId, medicalCaseId });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Không có quyền tải ảnh lên hồ sơ này.";
+    return NextResponse.json({ error: message }, { status: 403 });
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());

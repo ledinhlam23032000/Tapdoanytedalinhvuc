@@ -86,15 +86,21 @@ export async function updateDraftConsultation(actorId: string, input: z.input<ty
   await assertHealthcareModuleEnabled(company.id);
   const existing = await assertSameCompanyConsultation(company.id, parsed.consultationId);
 
-  if (existing.status === "FINAL") {
-    throw new Error(
-      "Phiếu khám đã chốt — không sửa được nội dung gốc. Dùng chức năng bổ sung (addendum).",
-    );
-  }
-
   return db.$transaction(async (tx) => {
+    // Khoá + đọc lại TRONG transaction: nếu không, update này có thể đua với
+    // finalizeConsultation (đọc DRAFT ở ngoài, ghi trong lúc bên kia đã FINAL)
+    // và ghi đè nội dung gốc lên một bản ghi vừa chốt — phá thẳng ADR-039.
+    // P0 fix (adversarial review Phần 7), cùng khuôn finalizeConsultation.
+    await tx.$queryRaw`SELECT id FROM "ClinicalConsultation" WHERE id = ${existing.id} FOR UPDATE`;
+    const fresh = await tx.clinicalConsultation.findUniqueOrThrow({ where: { id: existing.id } });
+    if (fresh.status === "FINAL") {
+      throw new Error(
+        "Phiếu khám đã chốt — không sửa được nội dung gốc. Dùng chức năng bổ sung (addendum).",
+      );
+    }
+
     const record = await tx.clinicalConsultation.update({
-      where: { id: existing.id },
+      where: { id: fresh.id },
       data: {
         subjective: parsed.subjective,
         objective: parsed.objective,
@@ -231,11 +237,15 @@ export async function recordScreeningItem(actorId: string, input: z.input<typeof
   await assertHealthcareModuleEnabled(company.id);
   const consultation = await assertSameCompanyConsultation(company.id, parsed.consultationId);
 
-  if (consultation.status === "FINAL") {
-    throw new Error("Phiếu khám đã chốt — không sửa sàng lọc được. Dùng chức năng bổ sung.");
-  }
-
   return db.$transaction(async (tx) => {
+    // Khoá + đọc lại TRONG transaction — cùng lý do updateDraftConsultation:
+    // chặn đua với finalizeConsultation ghi đè sàng lọc lên phiếu vừa chốt.
+    await tx.$queryRaw`SELECT id FROM "ClinicalConsultation" WHERE id = ${consultation.id} FOR UPDATE`;
+    const freshConsultation = await tx.clinicalConsultation.findUniqueOrThrow({ where: { id: consultation.id } });
+    if (freshConsultation.status === "FINAL") {
+      throw new Error("Phiếu khám đã chốt — không sửa sàng lọc được. Dùng chức năng bổ sung.");
+    }
+
     const record = await tx.clinicalScreeningItem.upsert({
       where: { consultationId_itemKey: { consultationId: consultation.id, itemKey: parsed.itemKey } },
       create: {
@@ -261,7 +271,12 @@ export async function recordScreeningItem(actorId: string, input: z.input<typeof
       targetType: "ClinicalScreeningItem",
       targetId: record.id,
       companyId: company.id,
-      metadata: { itemKey: parsed.itemKey, answer: parsed.answer },
+      // P1 fix (red-team CONFIRMED, bất biến #78): KHÔNG ghi `answer` thật —
+      // (itemKey, answer) là một sự thật lâm sàng cụ thể về bệnh nhân
+      // (vd "hiv_status": "YES"), lọt qua AuditEvent là lọt qua PHI mà
+      // không cần quyền healthcare.consultation.view. Cùng pattern
+      // outcomeRecorded/outcomeLength đã dùng ở followup-service.ts.
+      metadata: { itemKey: parsed.itemKey, answered: parsed.answer !== null },
     });
     return { id: record.id };
   });

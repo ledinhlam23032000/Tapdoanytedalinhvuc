@@ -14,6 +14,7 @@ import * as caseService from "@/lib/domain/healthcare/medical-case-service";
 import * as consultationService from "@/lib/domain/healthcare/consultation-service";
 import * as procedureService from "@/lib/domain/healthcare/procedure-service";
 import * as consentService from "@/lib/domain/healthcare/consent-service";
+import * as followupService from "@/lib/domain/healthcare/followup-service";
 import * as inventoryService from "@/lib/domain/inventory-service";
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "";
@@ -97,10 +98,17 @@ async function seed() {
   const itemA = await db.inventoryItem.create({ data: { companyId: companyA.id, name: "Kim tiêm A7", unit: "cái" } });
   const itemB = await db.inventoryItem.create({ data: { companyId: companyB.id, name: "Vật tư B7", unit: "cái" } });
 
+  // Dịch vụ chỉ-tư-vấn (ADR-044/policy CVI) — quyết định policy lỏng đến từ
+  // cấu hình danh mục do catalog.manage đặt sẵn, KHÔNG suy từ text tự do
+  // Procedure.procedureType (P0 fix: xem comment CatalogItem.isConsultationOnly).
+  const catalogItemConsultA = await db.catalogItem.create({
+    data: { companyId: companyA.id, name: "Tư vấn (chỉ tư vấn)", type: "SERVICE", isConsultationOnly: true },
+  });
+
   return {
     suffix, ownerA, doctorA, nurseA, receptionA, ownerB, doctorB, outsider,
     ecosystem, companyA, companyB, companyC,
-    customerA, customerB, locationA, locationB, itemA, itemB,
+    customerA, customerB, locationA, locationB, itemA, itemB, catalogItemConsultA,
   };
 }
 
@@ -122,6 +130,7 @@ async function cleanup(f: Fixtures) {
   await db.inventoryItem.deleteMany({ where: { companyId: { in: companyIds } } });
   await db.inventoryLocation.deleteMany({ where: { companyId: { in: companyIds } } });
   await db.customer.deleteMany({ where: { companyId: { in: companyIds } } });
+  await db.catalogItem.deleteMany({ where: { companyId: { in: companyIds } } });
   await db.companyModule.deleteMany({ where: { companyId: { in: companyIds } } });
   await db.companyMembershipPack.deleteMany({ where: { membership: { companyId: { in: companyIds } } } });
   await db.companyMembership.deleteMany({ where: { userId: { in: userIds } } });
@@ -246,7 +255,7 @@ describe("Cross-company (ADR-038)", () => {
       companyId: fx.companyA.id,
       medicalCaseId: c.id,
       primaryClinicianUserId: fx.doctorA.id,
-      procedureType: "consult",
+      catalogItemId: fx.catalogItemConsultA.id, // policy lỏng — không phải trọng tâm test này
     });
     await procedureService.startProcedure(fx.doctorA.id, { companyId: fx.companyA.id, procedureId: p.id });
     await expect(
@@ -372,7 +381,7 @@ describe("Procedure readiness + vật tư (ADR-043/044)", () => {
       companyId: fx.companyA.id,
       medicalCaseId: c.id,
       primaryClinicianUserId: fx.doctorA.id,
-      procedureType: "consult", // policy lỏng — mục CVI
+      catalogItemId: fx.catalogItemConsultA.id, // policy lỏng — mục CVI
     });
     await inventoryService.receiveStock(fx.ownerA.id, {
       companyId: fx.companyA.id,
@@ -449,7 +458,7 @@ describe("Procedure readiness + vật tư (ADR-043/044)", () => {
       companyId: fx.companyA.id,
       medicalCaseId: c.id,
       primaryClinicianUserId: fx.doctorA.id,
-      procedureType: "consult",
+      catalogItemId: fx.catalogItemConsultA.id, // policy lỏng — không phải trọng tâm test này
     });
     await procedureService.startProcedure(fx.doctorA.id, { companyId: fx.companyA.id, procedureId: p.id });
 
@@ -565,5 +574,103 @@ describe("Company Suspended chặn ghi lâm sàng (#98)", () => {
       }),
     ).rejects.toThrow(AuthorizationError);
     await db.company.update({ where: { id: fx.companyB.id }, data: { status: "ACTIVE" } });
+  });
+});
+
+// Adversarial review (sau checkpoint Phần 6) tìm 3 cụm P0 race condition thật
+// trong Phần 7 — cùng root cause class với 4 P0 của Phần 6: hàm domain đọc
+// trạng thái rồi ghi mà KHÔNG khoá dòng bằng SELECT...FOR UPDATE trong
+// db.$transaction. Bắn THẬT 2 lệnh song song vào cùng Postgres instance
+// (không mô phỏng), đúng convention "Concurrency" của tenant-isolation-part6.
+describe("Concurrency — race condition regression (P0 fix, Phần 7)", () => {
+  it("2 lần ĐỒNG THỜI: updateDraftConsultation vs finalizeConsultation — không ghi đè nội dung bản đã FINAL", async () => {
+    const c = await caseService.createMedicalCase(fx.doctorA.id, {
+      companyId: fx.companyA.id,
+      customerId: fx.customerA.id,
+    });
+    const con = await consultationService.createConsultation(fx.doctorA.id, {
+      companyId: fx.companyA.id,
+      medicalCaseId: c.id,
+      assessment: "Ban đầu",
+    });
+
+    const [updateResult, finalizeResult] = await Promise.allSettled([
+      consultationService.updateDraftConsultation(fx.doctorA.id, {
+        companyId: fx.companyA.id,
+        consultationId: con.id,
+        assessment: "RACE_UPDATE",
+      }),
+      consultationService.finalizeConsultation(fx.doctorA.id, {
+        companyId: fx.companyA.id,
+        consultationId: con.id,
+      }),
+    ]);
+
+    expect(finalizeResult.status).toBe("fulfilled"); // finalize không tranh chấp với chính nó ở đây
+    const stored = await db.clinicalConsultation.findUniqueOrThrow({ where: { id: con.id } });
+    expect(stored.status).toBe("FINAL");
+    if (updateResult.status === "fulfilled") {
+      // Update commit TRƯỚC finalize -> nội dung mới phải còn nguyên trong bản FINAL.
+      expect(stored.assessment).toBe("RACE_UPDATE");
+    } else {
+      // Update chạy SAU khi đã FINAL -> phải bị chặn đúng lý do, KHÔNG được
+      // ghi đè lặng lẽ (đây chính là bug đã fix: trước đây update không khoá
+      // dòng nên có thể thắng race và ghi đè "Ban đầu" -> "RACE_UPDATE" lên
+      // một bản ghi đã chốt).
+      expect((updateResult.reason as Error).message).toMatch(/đã chốt/i);
+    }
+  });
+
+  it("2 lần startProcedure ĐỒNG THỜI cho cùng thủ thuật: chỉ 1 thành công", async () => {
+    const c = await caseService.createMedicalCase(fx.doctorA.id, {
+      companyId: fx.companyA.id,
+      customerId: fx.customerA.id,
+    });
+    const p = await procedureService.planProcedure(fx.doctorA.id, {
+      companyId: fx.companyA.id,
+      medicalCaseId: c.id,
+      primaryClinicianUserId: fx.doctorA.id,
+      catalogItemId: fx.catalogItemConsultA.id,
+    });
+
+    const results = await Promise.allSettled([
+      procedureService.startProcedure(fx.doctorA.id, { companyId: fx.companyA.id, procedureId: p.id }),
+      procedureService.startProcedure(fx.doctorA.id, { companyId: fx.companyA.id, procedureId: p.id }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    expect(fulfilled).toHaveLength(1); // trước fix: cả hai đều đọc PLANNED ở ngoài tx, cả hai có thể cùng "thành công"
+
+    const stored = await db.procedure.findUniqueOrThrow({ where: { id: p.id } });
+    expect(stored.status).toBe("IN_PROGRESS");
+  });
+
+  it("2 lần recordFollowUpOutcome ĐỒNG THỜI cho cùng lịch theo dõi: chỉ 1 thành công, không ghi đè kết luận", async () => {
+    const c = await caseService.createMedicalCase(fx.doctorA.id, {
+      companyId: fx.companyA.id,
+      customerId: fx.customerA.id,
+    });
+    const followUp = await followupService.createMedicalFollowUp(fx.doctorA.id, {
+      companyId: fx.companyA.id,
+      medicalCaseId: c.id,
+      scheduledFor: new Date(),
+    });
+
+    const results = await Promise.allSettled([
+      followupService.recordFollowUpOutcome(fx.doctorA.id, {
+        companyId: fx.companyA.id,
+        followUpId: followUp.id,
+        clinicalOutcome: "Kết luận A",
+      }),
+      followupService.recordFollowUpOutcome(fx.doctorA.id, {
+        companyId: fx.companyA.id,
+        followUpId: followUp.id,
+        clinicalOutcome: "Kết luận B",
+      }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    expect(fulfilled).toHaveLength(1); // trước fix: người commit sau ghi đè người trước, không dấu vết
+
+    const stored = await db.medicalFollowUp.findUniqueOrThrow({ where: { id: followUp.id } });
+    expect(["Kết luận A", "Kết luận B"]).toContain(stored.clinicalOutcome);
   });
 });

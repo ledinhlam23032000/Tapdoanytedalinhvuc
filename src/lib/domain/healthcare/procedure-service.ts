@@ -9,6 +9,7 @@ import {
   assertSameCompanyOrganizationUnit,
   assertSameCompanyInventoryItem,
   assertSameCompanyInventoryLocation,
+  assertActiveMemberOfCompany,
 } from "@/lib/domain/scope-guards";
 import { assertHealthcareModuleEnabled } from "@/lib/domain/healthcare/module-service";
 import { issueStockTx, reverseStockIssueTx } from "@/lib/domain/inventory-service";
@@ -65,6 +66,13 @@ export async function planProcedure(actorId: string, input: z.input<typeof planP
   }
   if (parsed.catalogItemId) await assertSameCompanyCatalogItem(company.id, parsed.catalogItemId);
   if (parsed.organizationUnitId) await assertSameCompanyOrganizationUnit(company.id, parsed.organizationUnitId);
+  // P0 fix (red-team CONFIRMED, chứng minh bằng exploit thật trên Postgres
+  // thật): thiếu guard này cho phép gán primaryClinicianUserId là User của
+  // Company khác — vừa phá ADR-038 vừa rò rỉ displayName/email cross-tenant
+  // qua include ở getProcedureList/getProcedureDetail.
+  if (parsed.primaryClinicianUserId) {
+    await assertActiveMemberOfCompany(company.id, parsed.primaryClinicianUserId);
+  }
 
   // ADR-050: saleLineId là OPTIONAL và không ràng buộc 1-1. Một Sale có thể
   // có N Procedure; một thủ thuật có thể chưa gắn giao dịch nào (bất biến #48:
@@ -106,10 +114,22 @@ export async function planProcedure(actorId: string, input: z.input<typeof planP
   });
 }
 
-/** Dịch vụ chỉ tư vấn dùng policy lỏng hơn (mục CVI) — nếu bắt buộc consent
- *  và screening cho mọi loại thì sẽ chặn nhầm chính luồng phổ biến nhất. */
-function policyFor(procedureType: string | null): typeof DEFAULT_PROCEDURE_POLICY {
-  if (procedureType && /consult|tư vấn|tu van/i.test(procedureType)) return CONSULTATION_ONLY_POLICY;
+/**
+ * Dịch vụ chỉ tư vấn dùng policy lỏng hơn (mục CVI) — nếu bắt buộc consent
+ * và screening cho mọi loại thì sẽ chặn nhầm chính luồng phổ biến nhất.
+ *
+ * P0 fix (red-team CONFIRMED): bản cũ suy policy bằng regex trên
+ * `procedureType` — một trường TEXT TỰ DO actor tự gõ lúc lập kế hoạch, nên
+ * actor chỉ cần gõ "tiêm filler (đã tư vấn)" là né được toàn bộ yêu cầu
+ * consent/screening/finalized-consultation cho một thủ thuật xâm lấn thật.
+ * Giờ quyết định đọc từ `CatalogItem.isConsultationOnly` — cột do người có
+ * quyền `catalog.manage` cấu hình sẵn cho từng dịch vụ, KHÔNG phải actor tại
+ * thời điểm tạo Procedure. Không có catalogItemId (thủ thuật tự do, không
+ * qua danh mục) → mặc định DEFAULT_PROCEDURE_POLICY (an toàn hơn theo mặc
+ * định — không suy luận lỏng khi thiếu dữ liệu kiểm soát).
+ */
+function policyFor(catalogItem: { isConsultationOnly: boolean } | null): typeof DEFAULT_PROCEDURE_POLICY {
+  if (catalogItem?.isConsultationOnly) return CONSULTATION_ONLY_POLICY;
   return DEFAULT_PROCEDURE_POLICY;
 }
 
@@ -131,12 +151,25 @@ export async function getProcedureReadiness(
 
 async function computeReadiness(
   companyId: string,
-  procedure: { id: string; medicalCaseId: string; status: string; primaryClinicianUserId: string | null; procedureType: string | null },
+  procedure: {
+    id: string;
+    medicalCaseId: string;
+    status: string;
+    primaryClinicianUserId: string | null;
+    catalogItemId: string | null;
+  },
 ): Promise<ProcedureReadiness> {
   const medicalCase = await db.medicalCase.findUniqueOrThrow({
     where: { id: procedure.medicalCaseId },
     select: { status: true },
   });
+
+  const catalogItem = procedure.catalogItemId
+    ? await db.catalogItem.findUnique({
+        where: { id: procedure.catalogItemId },
+        select: { isConsultationOnly: true },
+      })
+    : null;
 
   const now = new Date();
   const signedConsent = await db.consentRecord.findFirst({
@@ -165,7 +198,7 @@ async function computeReadiness(
       hasFinalizedConsultation: finalConsultation !== null,
       unrecordedRequiredScreeningCount: unrecorded,
     },
-    policyFor(procedure.procedureType),
+    policyFor(catalogItem),
   );
 }
 
@@ -196,8 +229,18 @@ export async function startProcedure(actorId: string, input: z.input<typeof proc
   }
 
   return db.$transaction(async (tx) => {
+    // Khoá + đọc lại TRONG transaction — không thì đua với cancelProcedure/
+    // completeProcedure (đọc PLANNED/READY ở ngoài rồi cùng ghi), có thể "hồi
+    // sinh" một thủ thuật vừa bị huỷ thành IN_PROGRESS mà không re-check
+    // readiness. Cùng lớp lỗi với 4 P0 Phần 6.
+    await tx.$queryRaw`SELECT id FROM "Procedure" WHERE id = ${procedure.id} FOR UPDATE`;
+    const fresh = await tx.procedure.findUniqueOrThrow({ where: { id: procedure.id } });
+    if (fresh.status !== "PLANNED" && fresh.status !== "READY") {
+      throw new Error("Chỉ bắt đầu được thủ thuật đang ở trạng thái lên lịch.");
+    }
+
     const record = await tx.procedure.update({
-      where: { id: procedure.id },
+      where: { id: fresh.id },
       data: { status: "IN_PROGRESS" },
     });
     await recordAudit(tx, {
@@ -346,19 +389,26 @@ export async function cancelProcedure(actorId: string, input: z.input<typeof can
   await assertHealthcareModuleEnabled(company.id);
   const procedure = await assertSameCompanyProcedure(company.id, parsed.procedureId);
 
-  // Đã hoàn tất thì không huỷ — sai sót sau khi thực hiện xử lý bằng
-  // reversal vật tư + addendum lâm sàng, không phải bằng cách xoá trạng thái.
-  if (procedure.status === "COMPLETED") {
-    throw new Error("Thủ thuật đã hoàn tất — không huỷ được. Dùng hoàn trả vật tư nếu ghi nhầm.");
-  }
-  if (procedure.status === "CANCELLED") {
-    throw new Error("Thủ thuật này đã bị huỷ trước đó.");
-  }
-
   return db.$transaction(async (tx) => {
+    // Khoá + đọc lại TRONG transaction — chặn đua với startProcedure/
+    // completeProcedure: nếu không, huỷ có thể ghi đè lên một thủ thuật vừa
+    // hoàn tất (đã trừ kho thật), để lại CANCELLED nhưng còn nguyên
+    // completedByUserId/ProcedureMaterialUsage — trạng thái mâu thuẫn.
+    await tx.$queryRaw`SELECT id FROM "Procedure" WHERE id = ${procedure.id} FOR UPDATE`;
+    const fresh = await tx.procedure.findUniqueOrThrow({ where: { id: procedure.id } });
+
+    // Đã hoàn tất thì không huỷ — sai sót sau khi thực hiện xử lý bằng
+    // reversal vật tư + addendum lâm sàng, không phải bằng cách xoá trạng thái.
+    if (fresh.status === "COMPLETED") {
+      throw new Error("Thủ thuật đã hoàn tất — không huỷ được. Dùng hoàn trả vật tư nếu ghi nhầm.");
+    }
+    if (fresh.status === "CANCELLED") {
+      throw new Error("Thủ thuật này đã bị huỷ trước đó.");
+    }
+
     const record = await tx.procedure.update({
-      where: { id: procedure.id },
-      data: { status: "CANCELLED", clinicalNotes: procedure.clinicalNotes },
+      where: { id: fresh.id },
+      data: { status: "CANCELLED", clinicalNotes: fresh.clinicalNotes },
     });
     await recordAudit(tx, {
       actorUserId: actor.id,
@@ -396,25 +446,35 @@ export async function reverseProcedureMaterial(actorId: string, input: z.input<t
   if (!usage || usage.companyId !== company.id) {
     throw new Error("Bản ghi vật tư không hợp lệ trong công ty này.");
   }
-  if (usage.status === "REVERSED") {
-    throw new Error("Bản ghi vật tư này đã được hoàn trả trước đó.");
-  }
 
   return db.$transaction(async (tx) => {
+    // Khoá + đọc lại TRONG transaction — hai request hoàn trả đồng thời cho
+    // cùng usage trước đây cùng pass check status===REVERSED ngoài
+    // transaction rồi cùng gọi reverseStockIssueTx với CÙNG idempotencyKey;
+    // `@@unique([companyId, idempotencyKey])` trên StockMovement vẫn chặn
+    // double-credit thật, nhưng người thua nhận lỗi Prisma P2002 thô thay vì
+    // thông báo thân thiện. Chặn sớm ở đây tránh cả throw thô lẫn phụ thuộc
+    // hoàn toàn vào constraint tầng dưới.
+    await tx.$queryRaw`SELECT id FROM "ProcedureMaterialUsage" WHERE id = ${usage.id} FOR UPDATE`;
+    const fresh = await tx.procedureMaterialUsage.findUniqueOrThrow({ where: { id: usage.id } });
+    if (fresh.status === "REVERSED") {
+      throw new Error("Bản ghi vật tư này đã được hoàn trả trước đó.");
+    }
+
     await reverseStockIssueTx(tx, {
       companyId: company.id,
-      inventoryItemId: usage.inventoryItemId,
-      locationId: usage.inventoryLocationId,
-      quantity: Number(usage.quantity),
+      inventoryItemId: fresh.inventoryItemId,
+      locationId: fresh.inventoryLocationId,
+      quantity: Number(fresh.quantity),
       reason: parsed.reason,
       sourceType: "PROCEDURE_MATERIAL_USAGE",
-      sourceId: usage.id,
-      idempotencyKey: `${MATERIAL_REVERSAL_KEY_PREFIX}${usage.id}`,
+      sourceId: fresh.id,
+      idempotencyKey: `${MATERIAL_REVERSAL_KEY_PREFIX}${fresh.id}`,
       actorUserId: actor.id,
     });
 
     const record = await tx.procedureMaterialUsage.update({
-      where: { id: usage.id },
+      where: { id: fresh.id },
       data: { status: "REVERSED", reversalReason: parsed.reason },
     });
 

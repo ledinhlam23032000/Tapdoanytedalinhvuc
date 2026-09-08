@@ -695,6 +695,16 @@ model CatalogItem {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
+  // Phần 7 — P0 fix (red-team CONFIRMED): quyết định "thủ thuật này có bắt
+  // buộc consent/screening/finalized-consultation hay không" TRƯỚC ĐÂY suy
+  // từ regex trên Procedure.procedureType (text tự do actor tự gõ) — actor
+  // muốn né readiness chỉ cần gõ "tiêm filler (đã tư vấn)" là qua được toàn
+  // bộ guard. Cột này do người QUẢN TRỊ danh mục (catalog.manage) cấu hình
+  // sẵn cho từng dịch vụ, KHÔNG phải actor tại thời điểm tạo Procedure —
+  // mặc định false (an toàn: yêu cầu đủ consent/screening) cho mọi dịch vụ
+  // chưa được đánh dấu tường minh là chỉ-tư-vấn.
+  isConsultationOnly Boolean @default(false)
+
   company        Company         @relation(fields: [companyId], references: [id])
   saleLines      SaleLine[]
   inventoryItems InventoryItem[]

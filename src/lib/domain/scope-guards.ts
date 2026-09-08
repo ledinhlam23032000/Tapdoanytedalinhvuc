@@ -195,3 +195,20 @@ export async function assertSameCompanyMedicalFollowUp(companyId: string, follow
   }
   return record;
 }
+
+/** Người được gán vai trò (bác sĩ phụ trách, người thực hiện...) phải là
+ * thành viên ACTIVE của đúng Company — không suy company qua bảng User
+ * (bảng toàn cục, không tenant-scoped). P0 fix (red-team CONFIRMED, đã
+ * chứng minh bằng exploit thật): planProcedure từng bỏ sót guard này, cho
+ * phép gán primaryClinicianUserId là User của Company khác/không Company
+ * nào — vừa rò rỉ displayName/email cross-tenant qua include, vừa phá đúng
+ * bất biến ADR-038. */
+export async function assertActiveMemberOfCompany(companyId: string, userId: string) {
+  const membership = await db.companyMembership.findUnique({
+    where: { companyId_userId: { companyId, userId } },
+    select: { status: true },
+  });
+  if (!membership || membership.status !== "ACTIVE") {
+    throw new AuthorizationError("Người được gán không phải thành viên đang hoạt động của công ty này.");
+  }
+}

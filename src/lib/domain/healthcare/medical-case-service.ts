@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireCompanyContextForActor } from "@/lib/authorization/company-context";
-import { AuthorizationError } from "@/lib/authorization/errors";
 import { recordAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import {
   assertSameCompanyCustomer,
   assertSameCompanyOrganizationUnit,
   assertSameCompanyMedicalCase,
+  assertActiveMemberOfCompany,
 } from "@/lib/domain/scope-guards";
 import { assertHealthcareModuleEnabled } from "@/lib/domain/healthcare/module-service";
 
@@ -82,17 +82,6 @@ export async function createMedicalCase(actorId: string, input: z.input<typeof c
   });
 }
 
-/** Người phụ trách phải là thành viên ACTIVE của đúng Company (bất biến #10). */
-async function assertActiveMemberOfCompany(companyId: string, userId: string) {
-  const membership = await db.companyMembership.findUnique({
-    where: { companyId_userId: { companyId, userId } },
-    select: { status: true },
-  });
-  if (!membership || membership.status !== "ACTIVE") {
-    throw new AuthorizationError("Người phụ trách không phải thành viên đang hoạt động của công ty này.");
-  }
-}
-
 const updateMedicalCaseSchema = z.object({
   companyId: z.string().min(1),
   medicalCaseId: z.string().min(1),
@@ -109,12 +98,6 @@ export async function updateMedicalCase(actorId: string, input: z.input<typeof u
   await assertHealthcareModuleEnabled(company.id);
   const existing = await assertSameCompanyMedicalCase(company.id, parsed.medicalCaseId);
 
-  // Case đã kết thúc không sửa được nội dung — muốn sửa thì reopen trước
-  // (bất biến #172: không chuyển trạng thái ngoài ma trận hợp lệ).
-  if (existing.status === "CLOSED" || existing.status === "CANCELLED") {
-    throw new Error("Hồ sơ đã đóng hoặc đã huỷ — mở lại hồ sơ trước khi sửa.");
-  }
-
   if (parsed.organizationUnitId) {
     await assertSameCompanyOrganizationUnit(company.id, parsed.organizationUnitId);
   }
@@ -123,8 +106,19 @@ export async function updateMedicalCase(actorId: string, input: z.input<typeof u
   }
 
   return db.$transaction(async (tx) => {
+    // Khoá + đọc lại TRONG transaction — chặn đua với closeMedicalCase: nếu
+    // không, update có thể ghi đè nội dung lên một case vừa đóng (đọc OPEN ở
+    // ngoài trong lúc bên kia đang đóng), và nếu parsed.status được truyền thì
+    // còn âm thầm "mở lại" case mà không qua reopenMedicalCase (bỏ qua reason
+    // bắt buộc + audit REOPENED tương ứng) — vi phạm bất biến #172.
+    await tx.$queryRaw`SELECT id FROM "MedicalCase" WHERE id = ${existing.id} FOR UPDATE`;
+    const fresh = await tx.medicalCase.findUniqueOrThrow({ where: { id: existing.id } });
+    if (fresh.status === "CLOSED" || fresh.status === "CANCELLED") {
+      throw new Error("Hồ sơ đã đóng hoặc đã huỷ — mở lại hồ sơ trước khi sửa.");
+    }
+
     const record = await tx.medicalCase.update({
-      where: { id: existing.id },
+      where: { id: fresh.id },
       data: {
         caseType: parsed.caseType,
         status: parsed.status,
@@ -162,22 +156,33 @@ export async function closeMedicalCase(actorId: string, input: z.input<typeof cl
   await assertHealthcareModuleEnabled(company.id);
   const existing = await assertSameCompanyMedicalCase(company.id, parsed.medicalCaseId);
 
-  if (existing.status === "CLOSED" || existing.status === "CANCELLED") {
-    throw new Error("Hồ sơ này đã kết thúc trước đó.");
-  }
-
-  // Không đóng được khi còn thủ thuật đang dở — đóng lúc đó sẽ để lại bản ghi
-  // mồ côi về mặt nghiệp vụ (thủ thuật IN_PROGRESS thuộc một ca đã đóng).
-  const inFlight = await db.procedure.count({
-    where: { medicalCaseId: existing.id, status: "IN_PROGRESS" },
-  });
-  if (inFlight > 0) {
-    throw new Error(`Còn ${inFlight} thủ thuật đang thực hiện — hoàn tất hoặc huỷ trước khi đóng hồ sơ.`);
-  }
-
   return db.$transaction(async (tx) => {
+    // P0 fix (red-team CONFIRMED): bản cũ đọc status + đếm Procedure
+    // IN_PROGRESS NGOÀI transaction rồi mới update — hai request đóng đồng
+    // thời đều đọc cùng baseline trước khi bên nào commit (sinh 2 audit mâu
+    // thuẫn), và một startProcedure() commit xen giữa lúc đọc và lúc ghi có
+    // thể để lại MedicalCase.status=CLOSED trong khi Procedure vẫn
+    // IN_PROGRESS — đúng trạng thái không hợp lệ mà mục CCCLIV cấm. Khoá +
+    // đọc lại NGAY TRONG transaction, cùng pattern đã dùng ở
+    // finalizeConsultation/completeProcedure/signConsent/revokeConsent.
+    await tx.$queryRaw`SELECT id FROM "MedicalCase" WHERE id = ${existing.id} FOR UPDATE`;
+    const fresh = await tx.medicalCase.findUniqueOrThrow({ where: { id: existing.id } });
+
+    if (fresh.status === "CLOSED" || fresh.status === "CANCELLED") {
+      throw new Error("Hồ sơ này đã kết thúc trước đó.");
+    }
+
+    // Không đóng được khi còn thủ thuật đang dở — đóng lúc đó sẽ để lại bản
+    // ghi mồ côi về mặt nghiệp vụ (thủ thuật IN_PROGRESS thuộc một ca đã đóng).
+    const inFlight = await tx.procedure.count({
+      where: { medicalCaseId: fresh.id, status: "IN_PROGRESS" },
+    });
+    if (inFlight > 0) {
+      throw new Error(`Còn ${inFlight} thủ thuật đang thực hiện — hoàn tất hoặc huỷ trước khi đóng hồ sơ.`);
+    }
+
     const record = await tx.medicalCase.update({
-      where: { id: existing.id },
+      where: { id: fresh.id },
       data: { status: parsed.outcome, closedAt: new Date(), closeReason: parsed.reason },
     });
     await recordAudit(tx, {
@@ -204,15 +209,20 @@ export async function reopenMedicalCase(actorId: string, input: z.input<typeof r
   await assertHealthcareModuleEnabled(company.id);
   const existing = await assertSameCompanyMedicalCase(company.id, parsed.medicalCaseId);
 
-  if (existing.status !== "CLOSED") {
-    throw new Error("Chỉ mở lại được hồ sơ đã đóng.");
-  }
-
   return db.$transaction(async (tx) => {
+    // Khoá + đọc lại TRONG transaction cho nhất quán với updateMedicalCase/
+    // closeMedicalCase — hai lần reopen đồng thời hội tụ cùng kết quả nên tác
+    // động thấp, nhưng vẫn nên khoá để không đọc status stale.
+    await tx.$queryRaw`SELECT id FROM "MedicalCase" WHERE id = ${existing.id} FOR UPDATE`;
+    const fresh = await tx.medicalCase.findUniqueOrThrow({ where: { id: existing.id } });
+    if (fresh.status !== "CLOSED") {
+      throw new Error("Chỉ mở lại được hồ sơ đã đóng.");
+    }
+
     // closedAt/closeReason được xoá về null, nhưng lần đóng trước vẫn còn dấu
     // vết đầy đủ trong AuditEvent — không mất lịch sử (bất biến #88).
     const record = await tx.medicalCase.update({
-      where: { id: existing.id },
+      where: { id: fresh.id },
       data: { status: "IN_TREATMENT", closedAt: null, closeReason: null },
     });
     await recordAudit(tx, {
@@ -236,17 +246,34 @@ const CUSTOMER_SAFE_SELECT = {
   omit: { phoneCiphertext: true, phoneHash: true },
 } as const;
 
+/**
+ * `chiefComplaint` là nội dung lâm sàng thật (lý do khám), cùng nhóm nhạy cảm
+ * với SOAP của ClinicalConsultation (ADR-052) — KHÔNG được lộ cho actor chỉ
+ * có `healthcare.case.view` (case tồn tại/trạng thái) mà thiếu
+ * `healthcare.consultation.view`. P1 fix (adversarial review Phần 7): trước
+ * đây field này lộ nguyên vẹn qua getMedicalCaseList/Detail cho pack RECEPTION
+ * và mọi role generic OWNER/ADMIN/MANAGER dù các pack/preset đó cố tình không
+ * cấp quyền đọc nội dung khám.
+ */
+function redactChiefComplaint<T extends { chiefComplaint: string | null }>(
+  record: T,
+  canReadClinicalContent: boolean,
+): T {
+  return canReadClinicalContent ? record : { ...record, chiefComplaint: null };
+}
+
 export async function getMedicalCaseList(
   actorId: string,
   companyId: string,
   filter?: { status?: "OPEN" | "IN_TREATMENT" | "FOLLOW_UP" | "CLOSED" | "CANCELLED"; customerId?: string },
 ) {
-  const { company } = await requireCompanyContextForActor(actorId, companyId, "healthcare.case.view");
+  const { company, permissions } = await requireCompanyContextForActor(actorId, companyId, "healthcare.case.view");
   await assertHealthcareModuleEnabled(company.id);
+  const canReadClinicalContent = permissions.has("healthcare.consultation.view");
 
   // Bất biến #139: KHÔNG tồn tại "get all cases" không scope — companyId luôn
   // nằm trong where, không phải lọc sau khi fetch.
-  return db.medicalCase.findMany({
+  const cases = await db.medicalCase.findMany({
     where: { companyId: company.id, status: filter?.status, customerId: filter?.customerId },
     include: {
       customer: CUSTOMER_SAFE_SELECT,
@@ -255,14 +282,15 @@ export async function getMedicalCaseList(
     orderBy: { openedAt: "desc" },
     take: 200,
   });
+  return cases.map((c) => redactChiefComplaint(c, canReadClinicalContent));
 }
 
 export async function getMedicalCaseDetail(actorId: string, companyId: string, medicalCaseId: string) {
-  const { company } = await requireCompanyContextForActor(actorId, companyId, "healthcare.case.view");
+  const { company, permissions } = await requireCompanyContextForActor(actorId, companyId, "healthcare.case.view");
   await assertHealthcareModuleEnabled(company.id);
   await assertSameCompanyMedicalCase(company.id, medicalCaseId);
 
-  return db.medicalCase.findUnique({
+  const record = await db.medicalCase.findUnique({
     where: { id: medicalCaseId },
     include: {
       customer: CUSTOMER_SAFE_SELECT,
@@ -271,6 +299,8 @@ export async function getMedicalCaseDetail(actorId: string, companyId: string, m
       organizationUnit: true,
     },
   });
+  if (!record) return record;
+  return redactChiefComplaint(record, permissions.has("healthcare.consultation.view"));
 }
 
 /** Dùng cho tab "Hồ sơ chuyên môn" trên trang Customer (bất biến #102). */

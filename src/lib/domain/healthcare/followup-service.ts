@@ -261,18 +261,24 @@ export async function updateFollowUpStatus(actorId: string, input: z.input<typeo
   await assertHealthcareModuleEnabled(company.id);
 
   const existing = await assertSameCompanyMedicalFollowUp(company.id, parsed.followUpId);
-  if (existing.closedAt !== null) {
-    throw new Error("Lịch theo dõi đã đóng — không thể đổi trạng thái.");
-  }
-  // Đã có kết luận lâm sàng thì trạng thái không còn là chuyện lịch nữa: lùi
-  // về PLANNED/DUE sẽ mâu thuẫn với bản ghi lâm sàng đang tồn tại.
-  if (existing.clinicalOutcome !== null) {
-    throw new Error("Lịch theo dõi đã có kết luận lâm sàng — không đổi trạng thái qua đường này.");
-  }
 
   return db.$transaction(async (tx) => {
+    // Khoá + đọc lại TRONG transaction — chặn đua với recordFollowUpOutcome/
+    // closeMedicalFollowUp (đọc closedAt/clinicalOutcome null ở ngoài rồi cùng
+    // ghi), tránh lùi trạng thái sau khi bên kia vừa đóng/ghi kết luận.
+    await tx.$queryRaw`SELECT id FROM "MedicalFollowUp" WHERE id = ${existing.id} FOR UPDATE`;
+    const fresh = await tx.medicalFollowUp.findUniqueOrThrow({ where: { id: existing.id } });
+    if (fresh.closedAt !== null) {
+      throw new Error("Lịch theo dõi đã đóng — không thể đổi trạng thái.");
+    }
+    // Đã có kết luận lâm sàng thì trạng thái không còn là chuyện lịch nữa: lùi
+    // về PLANNED/DUE sẽ mâu thuẫn với bản ghi lâm sàng đang tồn tại.
+    if (fresh.clinicalOutcome !== null) {
+      throw new Error("Lịch theo dõi đã có kết luận lâm sàng — không đổi trạng thái qua đường này.");
+    }
+
     const updated = await tx.medicalFollowUp.update({
-      where: { id: parsed.followUpId },
+      where: { id: fresh.id },
       data: { status: parsed.status },
       select: { id: true },
     });
@@ -282,7 +288,7 @@ export async function updateFollowUpStatus(actorId: string, input: z.input<typeo
       targetType: "MedicalFollowUp",
       targetId: updated.id,
       companyId: company.id,
-      metadata: { fromStatus: existing.status, toStatus: parsed.status },
+      metadata: { fromStatus: fresh.status, toStatus: parsed.status },
     });
     return { id: updated.id };
   });
@@ -311,22 +317,29 @@ export async function recordFollowUpOutcome(actorId: string, input: z.input<type
   await assertHealthcareModuleEnabled(company.id);
 
   const existing = await assertSameCompanyMedicalFollowUp(company.id, parsed.followUpId);
-  if (existing.closedAt !== null) {
-    throw new Error("Lịch theo dõi đã đóng — không thể ghi kết luận mới.");
-  }
-  if (existing.status === "CANCELLED") {
-    throw new Error("Lịch theo dõi đã huỷ — không thể ghi kết luận lâm sàng.");
-  }
-  // Bản ghi lâm sàng đã ghi thì không ghi đè (cùng tinh thần "không overwrite
-  // clinical record" của Consultation): sửa nội dung y khoa phải là một hành
-  // động có lý do và dấu vết riêng, không phải một lần update lặng lẽ.
-  if (existing.clinicalOutcome !== null) {
-    throw new Error("Lần theo dõi này đã có kết luận lâm sàng — không thể ghi đè.");
-  }
 
   return db.$transaction(async (tx) => {
+    // Khoá + đọc lại TRONG transaction — hai clinician (hoặc double-submit)
+    // cùng ghi kết luận cho một follow-up còn trống trước đây có thể cùng
+    // pass check ngoài transaction; người commit sau ghi đè người trước không
+    // dấu vết, phá thẳng bất biến "đã ghi thì không ghi đè" của chính file này.
+    await tx.$queryRaw`SELECT id FROM "MedicalFollowUp" WHERE id = ${existing.id} FOR UPDATE`;
+    const fresh = await tx.medicalFollowUp.findUniqueOrThrow({ where: { id: existing.id } });
+    if (fresh.closedAt !== null) {
+      throw new Error("Lịch theo dõi đã đóng — không thể ghi kết luận mới.");
+    }
+    if (fresh.status === "CANCELLED") {
+      throw new Error("Lịch theo dõi đã huỷ — không thể ghi kết luận lâm sàng.");
+    }
+    // Bản ghi lâm sàng đã ghi thì không ghi đè (cùng tinh thần "không overwrite
+    // clinical record" của Consultation): sửa nội dung y khoa phải là một hành
+    // động có lý do và dấu vết riêng, không phải một lần update lặng lẽ.
+    if (fresh.clinicalOutcome !== null) {
+      throw new Error("Lần theo dõi này đã có kết luận lâm sàng — không thể ghi đè.");
+    }
+
     const updated = await tx.medicalFollowUp.update({
-      where: { id: parsed.followUpId },
+      where: { id: fresh.id },
       data: { status: "DONE", clinicalOutcome: parsed.clinicalOutcome },
       select: { id: true },
     });
@@ -362,19 +375,26 @@ export async function closeMedicalFollowUp(actorId: string, input: z.input<typeo
   await assertHealthcareModuleEnabled(company.id);
 
   const existing = await assertSameCompanyMedicalFollowUp(company.id, parsed.followUpId);
-  if (existing.closedAt !== null) {
-    throw new Error("Lịch theo dõi này đã được đóng trước đó.");
-  }
-  // Đóng với kết quả DONE mà chưa có kết luận lâm sàng = đúng cái bẫy bất biến
-  // #93 nói tới: một thao tác "hoàn tất" biến thành kết luận y khoa ngầm.
-  // Bắt buộc clinician gọi recordFollowUpOutcome trước.
-  if (parsed.finalStatus === "DONE" && existing.clinicalOutcome === null) {
-    throw new Error("Chưa có kết luận lâm sàng cho lần theo dõi này — hãy ghi kết luận trước khi đóng.");
-  }
 
   return db.$transaction(async (tx) => {
+    // Khoá + đọc lại TRONG transaction — hai lần đóng đồng thời với
+    // finalStatus khác nhau (vd DONE vs CANCELLED) trước đây có thể cùng pass
+    // check closedAt===null ngoài transaction; người commit sau thắng, để lại
+    // trạng thái mâu thuẫn với audit trail đã ghi cho lần đầu.
+    await tx.$queryRaw`SELECT id FROM "MedicalFollowUp" WHERE id = ${existing.id} FOR UPDATE`;
+    const fresh = await tx.medicalFollowUp.findUniqueOrThrow({ where: { id: existing.id } });
+    if (fresh.closedAt !== null) {
+      throw new Error("Lịch theo dõi này đã được đóng trước đó.");
+    }
+    // Đóng với kết quả DONE mà chưa có kết luận lâm sàng = đúng cái bẫy bất biến
+    // #93 nói tới: một thao tác "hoàn tất" biến thành kết luận y khoa ngầm.
+    // Bắt buộc clinician gọi recordFollowUpOutcome trước.
+    if (parsed.finalStatus === "DONE" && fresh.clinicalOutcome === null) {
+      throw new Error("Chưa có kết luận lâm sàng cho lần theo dõi này — hãy ghi kết luận trước khi đóng.");
+    }
+
     const updated = await tx.medicalFollowUp.update({
-      where: { id: parsed.followUpId },
+      where: { id: fresh.id },
       data: { status: parsed.finalStatus, closedAt: new Date() },
       select: { id: true },
     });
@@ -384,7 +404,7 @@ export async function closeMedicalFollowUp(actorId: string, input: z.input<typeo
       targetType: "MedicalFollowUp",
       targetId: updated.id,
       companyId: company.id,
-      metadata: { finalStatus: parsed.finalStatus, hadOutcome: existing.clinicalOutcome !== null },
+      metadata: { finalStatus: parsed.finalStatus, hadOutcome: fresh.clinicalOutcome !== null },
     });
     return { id: updated.id };
   });

@@ -14,7 +14,7 @@ khi bắt đầu Phần đó (token economy).
 | 4 | Organization + Work Core + Project | HOÀN TẤT |
 | 5 | CRM + Sales + Generic Operations | HOÀN TẤT |
 | 6 | Finance + Payroll + Commission + Inventory | HOÀN TẤT |
-| 7 | Healthcare Vertical + Legacy Clinic Parity | Chưa bắt đầu |
+| 7 | Healthcare Vertical + Legacy Clinic Parity | HOÀN TẤT |
 | 8 | AI Runtime + Digital COO + Ecosystem AI + Company AI + Decision Inbox + Safe Execution | Chưa bắt đầu |
 | 9 | Founder/Manager/Employee UX + Mission Control + Company Home + Today + Full Integration | Chưa bắt đầu |
 | 10 | Migration + Reconciliation + Security Hardening + E2E + Backup/Rollback + Production Readiness | Chưa bắt đầu — có HARD BLOCK bắt buộc trước cutover thật (`CUTOVER_APPROVAL_REQUIRED`) |

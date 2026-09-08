@@ -190,3 +190,16 @@ domain service vẫn từ chối.
 
 `RESERVED_PERMISSION_PREFIXES` giờ rỗng. Lưu ý đã xác minh: hằng số này chưa
 bao giờ được dùng ở đâu — nó là marker tài liệu, không phải cơ chế bảo vệ.
+
+**3. Field-level redaction ngoài record-level permission (phát hiện qua
+adversarial review, không phải thiết kế ban đầu).** `healthcare.case.view`
+chỉ có nghĩa "actor được thấy `MedicalCase` này tồn tại/trạng thái" — nó
+KHÔNG suy ra "actor được đọc mọi field trên record đó". `MedicalCase.chiefComplaint`
+là nội dung lâm sàng (cùng độ nhạy cảm với SOAP của `ClinicalConsultation`)
+nhưng nằm trên model mà preset generic OWNER/ADMIN/MANAGER + pack RECEPTION
+đều có `case.view`. Domain service (`medical-case-service.ts`) giờ redact
+field này về `null` khi actor thiếu `healthcare.consultation.view`, thay vì
+để permission check ở mức record quyết định toàn bộ payload. **Ranh giới mới
+cho Phần 8+**: khi một model có field nhạy cảm hơn permission `.view` chính
+của nó, redact tại domain service (nguồn), không dựa vào UI ẩn field hay dựa
+vào việc "record đã qua permission check nên field nào cũng đọc được".

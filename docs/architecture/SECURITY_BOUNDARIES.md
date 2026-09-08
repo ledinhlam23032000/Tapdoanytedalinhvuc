@@ -169,6 +169,23 @@ thì vẫn bị từ chối.
 Ranh giới thứ ba: `healthcare.*` **không bao giờ** implicit-grant
 `finance.*`/`payroll.*` (#49) — có unit test âm tính riêng cho từng pack.
 
+Ranh giới thứ tư (ADR-052): dữ liệu lâm sàng **không có mã hoá field-level
+riêng** (khác `Customer.phoneCiphertext`, Phần 5) — bất biến CCXVIII của
+Master Prompt cấm tự phát minh cơ chế mã hoá riêng, yêu cầu dùng best-practice
+sẵn có của platform/DB/storage. Bù lại bằng kiểm soát truy cập tầng
+application đã liệt kê ở trên (permission pack, module gate, PHI không lọt
+log kỹ thuật, không cache PHI liên-Company) + **backlog bắt buộc trước
+`CUTOVER_APPROVAL_REQUIRED` (Phần 10)**: xác nhận managed Postgres/storage
+provider thật có bật encryption-at-rest.
+
+Ranh giới thứ năm (adversarial review, tìm sau khi phần lớn code đã viết):
+permission `healthcare.case.view` (cấp cho preset generic + pack RECEPTION)
+chỉ có nghĩa "case tồn tại/trạng thái", KHÔNG phải "đọc được nội dung lâm
+sàng" — field liền kề trên cùng model (`MedicalCase.chiefComplaint`) từng lộ
+nguyên vẹn cho các actor đó dù họ thiếu `healthcare.consultation.view`. Bài
+học: field-level sensitivity phải được audit riêng, không suy từ việc model
+cha đã có permission gate đúng ở record-level.
+
 ## Red-team review
 
 Xem `docs/architecture/RED_TEAM_REVIEW.md` — kết quả review đối kháng thiết
