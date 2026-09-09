@@ -1128,6 +1128,11 @@ Và giữ #99: membership không ACTIVE thì resolver trả về set rỗng trư
 **Hệ quả:** 6 unit test ràng buộc **âm tính** trong
 `src/lib/permissions/__tests__/presets.test.ts` — loại bất biến "KHÔNG được
 chứa X" rất dễ trôi khi ai đó tiện tay thêm quyền vào pack, và không test nào
+khác bắt được. Có thêm test "mọi permission trong pack đều là key hợp lệ
+trong registry" để pack không thể chứa key chết.
+
+Phần 8+ nếu cần vai trò chuyên môn khác (AI operator, kế toán trưởng...) thì
+thêm pack mới, KHÔNG thêm giá trị vào `CompanyRolePreset`.
 
 ## ADR-052 — Dữ liệu lâm sàng KHÔNG dùng application-level field encryption riêng; dựa vào encryption-at-rest của platform/DB/storage
 
@@ -1172,8 +1177,257 @@ Phần 7. Nếu sau này có yêu cầu nghiệp vụ thật cần tìm kiếm-m
 encryption) hoặc chia sẻ dữ liệu lâm sàng ra ngoài biên DB tin cậy, quyết
 định lại bằng ADR mới — không tự ý quay lại pattern field-level encryption
 khi chưa có use case đó.
-khác bắt được. Có thêm test "mọi permission trong pack đều là key hợp lệ
-trong registry" để pack không thể chứa key chết.
 
-Phần 8+ nếu cần vai trò chuyên môn khác (AI operator, kế toán trưởng...) thì
-thêm pack mới, KHÔNG thêm giá trị vào `CompanyRolePreset`.
+## ADR-053 — Kiến trúc phân cấp AI: 1 Ecosystem AI/Ecosystem, 1 Company AI/Company active, Specialist là capability không phải Agent entity riêng (mặc định)
+
+**Quyết định:** `AiAgent` là model MỚI, scope tường minh `ECOSYSTEM` hoặc
+`COMPANY` (không `ORG_UNIT`/`PROJECT` ở Phần 8 — xem hệ quả). Mỗi Ecosystem
+có đúng 1 `AiAgent` scope ECOSYSTEM; mỗi Company đang `ACTIVE` có đúng 1
+`AiAgent` scope COMPANY, tạo đồng thời trong transaction tạo Company (không
+để "half-created agent"; Company cũ thiếu `AiAgent` được backfill bằng
+script một lần, không phải lazy-create ẩn). Specialist theo domain
+(Finance/Sales/Healthcare Specialist) **mặc định KHÔNG phải Agent entity
+riêng** — là capability/toolset được cấp cho chính Company AI, lọc theo
+permission thật của actor đang hỏi (bác sĩ hỏi Company AI thấy tool
+healthcare, kế toán hỏi thấy tool finance, cùng 1 `AiAgent` record).
+
+**Vì sao:** Bất biến CXLV/CXLVI (`PART8_SPEC_DIGEST.md` §2) cấm tạo Agent
+riêng cho Project/Org Unit ở giai đoạn này để tránh agent proliferation;
+bất biến XXV yêu cầu tự hỏi "đây có phải nhân viên số độc lập thật hay chỉ
+là capability" trước khi tạo Agent entity — không có bằng chứng nghiệp vụ
+nào trong spec đòi Specialist phải có identity/memory/permission riêng
+ngay từ Phần 8 (đúng nguyên tắc "không xây trước khi có nhu cầu thật" đã
+áp dụng nhất quán từ Phần 4, ADR-016/ADR-019). Bất biến XIV yêu cầu mỗi
+Company active có Company AI logic riêng, scope cứng vào Company đó.
+
+**Hệ quả:** `AiAgent` không có FK `organizationUnitId`/`projectId`. Nếu
+sau này 1 domain cụ thể (vd Finance Specialist) chứng minh cần identity/
+memory/permission tách biệt thật (không chỉ là toolset), thêm bằng ADR mới
+kèm use case cụ thể — đúng khuôn ADR-037 (không tạo `HealthcareProfile`
+khi chưa cần). `AiAgent` KHÔNG map 1-1 vật lý với `ZAiAgent` legacy (ADR
+này không có nghĩa vụ tương thích cấu trúc — xem ADR-058 phần salvage).
+
+## ADR-054 — Ba khái niệm tách biệt: AiConversation (hội thoại), AiRun (thực thi kỹ thuật), AiActionProposal (đề xuất nghiệp vụ) — không gộp chung
+
+**Quyết định:** 3 model riêng, không dùng 1 bảng đa năng:
+- `AiConversation` — lịch sử tương tác, scope `companyId?`/`userId`/
+  `agentId`, chỉ user được cấp quyền mới đọc được hội thoại của mình.
+- `AiRun` — 1 lần thực thi bất đồng bộ (đọc, phân tích, hoặc chuẩn bị/thực
+  thi hành động), có state machine riêng (xem ADR-058), KHÔNG lộ tên model
+  vật lý (`claude-sonnet-5`...) cho business user — chỉ tầng "AI Operations"
+  kỹ thuật thấy.
+- `AiActionProposal` — đề xuất thay đổi NGHIỆP VỤ cụ thể do 1 `AiRun` sinh
+  ra, cần approval nếu risk đủ cao (xem ADR-056/057), bind cứng với
+  `inputHash`/`targetType`/`targetId`/`companyId` tại thời điểm tạo.
+
+**Vì sao:** Bất biến LXXII-LXXVI (`PART8_SPEC_DIGEST.md` §4/§7) nêu đích
+danh: "Conversation và Run/Job là hai khái niệm khác nhau, phải tách
+riêng"; "Action Proposal và Job khác nhau, phải tách biệt". Gộp chung sẽ
+lặp lại lỗi god-model của legacy `CaseRecord` (ADR-036 đã dẫn: 1 model gánh
+5 trách nhiệm, không tách được domain nào ra domain nào). Tách riêng cũng
+cho phép 1 `AiRun` (vd "phân tích công nợ quá hạn") sinh ra 0 hoặc nhiều
+`AiActionProposal`, và 1 `AiConversation` có nhiều `AiRun` — quan hệ 1-N rõ
+ràng thay vì overload field trên 1 bảng.
+
+**Hệ quả:** Read model "AI đã làm gì" (business-facing, bất biến LXX) query
+qua `AiActionProposal` đã EXECUTED + `AiVerification` liên kết, không phải
+đọc thẳng `AiRun`. "Technical Job History" (bất biến LXXI, chỉ role kỹ
+thuật) mới đọc `AiRun`/`AiToolCall` thô. Không tạo `AiMessage` riêng ở Phần
+8 nếu `AiConversation` lưu được mảng message đơn giản đủ dùng — chỉ tách
+bảng khi có nhu cầu query/phân trang thật (search-before-create).
+
+## ADR-055 — Tool Registry là ranh giới an toàn cứng: chỉ Business Tools wrap canonical domain command; cấm SQL thô/code-exec/filesystem/SSRF
+
+**Quyết định:** AI (Company AI/Ecosystem AI) chỉ được gọi qua 1 registry
+tường minh các "Business Tools" — mỗi tool wrap ĐÚNG MỘT canonical domain
+function đã tồn tại từ Phần 3-7 (vd `createWorkItem`, `recordPayment`,
+KHÔNG viết `updateCustomerDatabaseRaw`/`updateAnything(entity, data)`).
+Không tool nào được quyền: chạy SQL thô, thực thi code/shell tuỳ ý, truy
+cập filesystem không giới hạn, hoặc gọi HTTP ra ngoài không qua allowlist
+(SSRF). Input mỗi tool validate bằng Zod schema (đúng convention Phần
+3-7), tenant scope (`companyId`) của tool **luôn lấy từ actor context phía
+server**, KHÔNG BAO GIỜ nhận companyId model AI tự sinh ra trong tool-call
+argument làm giá trị tin cậy — nếu model xuất companyId khác context hiện
+tại, deny + ghi `SecurityEvent`, không thực thi.
+
+**Vì sao:** Bất biến CCCVI-CCCXIII gọi đây là "kiến trúc an toàn then
+chốt"; bất biến XXXIX/XL/CCCLIV yêu cầu rõ tenant scope authoritative từ
+runtime, không tin output model dù model "cố tình" xuất đúng ID. Đây chính
+là lớp phòng thủ ngăn class lỗi nguy hiểm nhất của Phần 8 (AI ghi dữ liệu
+sai Company) — tương đương về mức độ nghiêm trọng với bài học ADR-003 (Core
+Company≠Project) và bài học "user.role===ADMIN bypass ZProjectMember" của
+ZenithTasks đã dẫn xuyên suốt CLAUDE.md. AI runtime nội bộ (Claude Code) và
+AI sản phẩm (Company AI) tách biệt hoàn toàn quyền — CCCXII/CCCXIII: Digital
+COO không bao giờ sửa source code, chỉ vận hành nghiệp vụ.
+
+**Hệ quả:** Mọi Business Tool Phần 8 trở đi bắt buộc đi qua checklist:
+đã có canonical domain function tương ứng chưa (search-before-create, nếu
+chưa thì tool KHÔNG được viết logic ghi riêng — phải tạo domain function
+chuẩn trước) → input Zod schema → risk classification tường minh (ADR-056)
+→ `assertHealthcareModuleEnabled`-style module gate nếu domain có (Phần 7)
+→ permission check thật (không chỉ khai báo tĩnh) → verification contract
+(ADR-056). Danh sách tool phải khớp CHÍNH XÁC những gì dispatcher hỗ trợ
+(bài học legacy: allowlist tool ghi trong registry nhưng dispatcher không
+hỗ trợ, hoặc ngược lại — `PART8_SPEC_DIGEST.md` bất biến XLII/XLIII).
+
+## ADR-056 — Risk không suy từ tên tool; mọi hành động high-risk đi đủ Golden Flow PLAN→PREVIEW→APPROVE→EXECUTE→VERIFY→AUDIT→REPORT, không bỏ bước
+
+**Quyết định:** Risk của MỘT LỆNH GỌI cụ thể được tính từ
+`(action, amount, target, domain, state, actor, scope, reversibility)`,
+không phải cố định theo tên tool — cùng 1 tool `voidPayment` có thể LOW
+risk (huỷ giao dịch test 10k) hoặc CRITICAL (huỷ khoản thu 23 triệu). Neo
+mốc tham khảo giữ nguyên như spec: `createWorkItem`/
+`recordCustomerInteraction`=LOW; `rescheduleAppointment`=MEDIUM;
+`recordPayment`=HIGH; `voidPayment`=HIGH/CRITICAL;
+`finalizePayroll`/`archiveCompany`=CRITICAL. Mọi hành động risk HIGH trở
+lên bắt buộc qua đủ 7 bước: PLAN (mục tiêu+resource+risk) → PREVIEW
+(human-readable ngôn ngữ nghiệp vụ, KHÔNG mã job kỹ thuật) → APPROVE (xem
+ADR-057) → EXECUTE (gọi canonical command, pre-execution revalidate: scope/
+authorization/Company active/idempotency key) → VERIFY (đọc lại canonical
+outcome thật, KHÔNG tin response "thành công" của lệnh gọi) → AUDIT (actor
+AI_AGENT + initiatingUser + correlationId, cùng transaction với thay đổi)
+→ REPORT (ngôn ngữ nghiệp vụ, số liệu thật, partial-failure báo đúng số
+thật).
+
+**Vì sao:** Bất biến XLVI-XLIX/LXIII-LXIX là trung tâm của toàn bộ Safe
+Execution Boundary (`PART8_SPEC_DIGEST.md` §6.2). Đây là class rủi ro cao
+nhất Phần 8 — sai ở đây nghĩa là AI ghi/sửa/xoá dữ liệu tài chính-y tế thật
+mà không ai kiểm soát được. Verify-sau-execute không phải tuỳ chọn: bài
+học Phần 6 (4 P0 race condition) và Phần 7 (3 P0 tương tự) đều là lỗi
+"tưởng ghi đúng nhưng không kiểm tra lại" — Golden Flow là phiên bản tổng
+quát hoá bài học đó cho MỌI hành động AI, không chỉ riêng lẻ từng domain.
+
+**Hệ quả:** Verify fail dù EXECUTE báo "success" → trạng thái
+`EXECUTION_INCONSISTENT`, KHÔNG BAO GIỜ báo "Hoàn tất" cho user (bất biến
+LXVII). Mọi write tool — kể cả LOW-risk — có verification contract riêng,
+chỉ khác mức độ nghiêm ngặt (bất biến CDXXXIII/CDXXXIV). Domain-specific
+boundary (Finance/Inventory/Sales/Work/Project/Healthcare) kế thừa nguyên
+Golden Flow này, KHÔNG tự chế luồng riêng cho từng domain.
+
+## ADR-057 — AiActionProposal là entity Decision Inbox riêng; hành động CRITICAL cần 2-người-duyệt tái dùng nguyên ApprovalRequest (ADR-028, Phần 6), không tạo approval engine thứ hai
+
+**Quyết định:** `AiActionProposal` (ADR-054) mang risk/plan/preview/evidence
+của MỘT đề xuất AI. Với risk HIGH: cần đúng 1 người duyệt (chính
+`AiActionProposal.approvedByUserId`/`rejectedByUserId`, không cần
+`ApprovalRequest`). Với risk CRITICAL: `AiActionProposal` tạo kèm 1
+`ApprovalRequest` (Phần 6) làm cơ chế 2-người-duyệt — mở rộng
+`ApprovalActionType` thêm giá trị mới (vd `AI_CRITICAL_ACTION`), TÁI DÙNG
+nguyên `approval-service.ts` (khoá dòng, chặn tự duyệt lần 2, PENDING→
+PENDING_SECOND→APPROVED). `AiActionProposal.status` phản ánh theo dõi
+`ApprovalRequest.status` liên kết qua `approvalRequestId?`. Decision Inbox
+("CẦN QUYẾT ĐỊNH") là READ-MODEL hợp nhất — 1 query/aggregation gộp
+`AiActionProposal` PENDING + `ApprovalRequest` PENDING (Payroll/Inventory,
+Phần 6) + bất kỳ domain decision nào khác, KHÔNG ép tất cả vào 1 bảng DB
+chung.
+
+**Vì sao:** Bất biến LVII/LVIII/LIX/LX (`PART8_SPEC_DIGEST.md` §5/§6.3)
+yêu cầu chính xác điều này: two-person approval bắt buộc cho critical,
+enforce ở server; Decision Inbox là "khái niệm UX hợp nhất, KHÔNG bắt buộc
+1 bảng DB chung". Tái dùng `ApprovalRequest` đúng tinh thần đã áp dụng
+xuyên suốt Phần 6-7 ("dùng lại approval-service.ts cho MỌI domain 2-người-
+duyệt tương lai, không tạo model duyệt thứ 2" — `CURRENT_WAVE.md` Phần 7).
+Không tái dùng 100% (bắt AiActionProposal tự đóng vai ApprovalRequest) vì
+2 lý do khác biệt thật: `ApprovalRequest.payload` là Json đóng theo
+domain-specific actionType, không mang được `inputHash`/correlation
+ID/preview-text mà AI proposal cần; và phần lớn AI proposal (LOW/MEDIUM
+risk) không cần 2-người-duyệt nên bắt chúng đi qua `ApprovalRequest` là
+overhead sai mục đích thiết kế gốc của bảng đó.
+
+**Hệ quả:** `approval-service.ts` (Phần 6) mở rộng nhận thêm actionType AI
+nhưng KHÔNG đổi logic lõi (row lock, same-actor-denial). Test tenant-
+isolation cho `ApprovalRequest` (Phần 6) áp dụng nguyên cho nhánh AI
+critical mới, cộng test riêng cho tầng `AiActionProposal` (single-approval
+HIGH-risk, self-approval denial ở tầng này cũng phải test riêng — bất biến
+LVIII áp dụng cho CẢ HAI tầng, không chỉ tầng `ApprovalRequest`).
+
+## ADR-058 — Job/Run Engine là database-polling worker đơn giản (kế thừa tinh thần `ai-job-worker.ts` legacy); idempotency key namespace theo `airun:`/`aiproposal:`
+
+**Quyết định:** `AiRun` có state machine đóng: `QUEUED → RUNNING →
+WAITING_APPROVAL? → EXECUTING → VERIFYING → COMPLETED | FAILED | CANCELLED`.
+Worker là 1 process Node polling bảng `AiRun` theo chu kỳ ngắn (kế thừa
+đúng pattern `ai-job-worker.ts` legacy đã chứng minh chạy được, KHÔNG dựng
+message-queue mới — Redis/Kafka/BullMQ). Idempotency key cho mọi write tool
+AI luôn có namespace prefix (`airun:${runId}:${stepIndex}` hoặc
+`aiproposal:${proposalId}`), KHÔNG BAO GIỜ dùng ID nội bộ trần khi cột đó
+chia sẻ unique constraint với key nguồn khác — đúng bài học Phần 6
+(namespace-collision, `procmat:`/`procmat-rev:` Phần 7).
+
+**Vì sao:** Bất biến CDXVII (`PART8_SPEC_DIGEST.md` §9, câu hỏi mở) để
+ngỏ "database-backed queue có đủ dùng hay cần công nghệ chuyên dụng —
+Evaluate"; nhưng bất biến CDXIV-CDXXIX (§8) CẤM TƯỜNG MINH microservices/
+event mesh/Kubernetes bắt buộc, và khuyến khích "tái dùng stack queue có
+sẵn từ legacy nếu tốt". Khảo cổ xác nhận `ai-job-worker.ts` (poll `ZAiJob`
+mỗi 15s) là pattern ĐÃ CHỨNG MINH chạy đúng trên DB thật — không có lý do
+nghiệp vụ nào ở quy mô hiện tại (single-instance Postgres, chưa multi-
+region) đòi hỏi message broker riêng. Idempotency LXXXII/LXXXIII là
+"bắt buộc/critical" không thương lượng.
+
+**Hệ quả:** Worker LUÔN reload record authoritative từ DB thay vì tin
+payload trong job queue (bất biến LXXXVI/LXXXVII) — không truyền
+`companyId`/scope qua tham số worker mà đọc lại từ `AiRun.companyId` mỗi
+lần xử lý. Stuck job (RUNNING quá lâu không tiến triển) phải được phát
+hiện bằng timestamp `lastProgressAt` + timeout, không để chạy ngầm vô hạn
+(bất biến LXXXIX/XC). Test bắt buộc: Idempotency Replay Test (retry sau
+timeout không tạo side-effect trùng), Worker Restart Test (job đang RUNNING
+khi worker restart phải phục hồi an toàn, không mất/không lặp).
+
+## ADR-059 — Ma trận scope enforcement cross-company/cross-ecosystem deny-by-default; Ecosystem AI đọc dữ liệu Company theo permission Founder thật, không phải quyền ngầm định
+
+**Quyết định:** Áp dụng nguyên ma trận `PART8_SPEC_DIGEST.md` §6.6:
+Ecosystem AI của E1 → Ecosystem E2 = DENY; Company AI của Company A →
+Company B (kể cả đọc) = DENY; Company AI A → Project A cùng Company = OK
+nếu tool/policy cho phép; Company AI A → dữ liệu healthcare Company B =
+DENY; Ecosystem AI → dữ liệu Company A/B = theo ĐÚNG permission
+Founder/domain thật (không phải vì là Ecosystem AI nên mặc định đọc được),
+Ecosystem AI → chi tiết lâm sàng = DENY trừ khi có quyền healthcare tường
+minh. Mọi kiểm tra này chạy ở TẦNG SERVER (business tool wrapper), không ở
+prompt/model, và test cho từng ô của ma trận là bắt buộc, không tuỳ chọn.
+
+**Vì sao:** Đây là áp dụng trực tiếp bất biến X-XIII/XXX (công thức
+"AGENT CAPABILITY ∩ AGENT SCOPE ∩ INITIATING USER AUTHORITY ∩ DOMAIN
+POLICY") và CCCLXXII-CCCLXXVII cho đúng use case Ecosystem AI đã tồn tại
+từ Phần 3 (`requireCompanyContextForActor`, `EcosystemMembership`). Đây
+KHÔNG PHẢI cơ chế mới — là áp dụng lại nguyên `scope-guards.ts`/
+`company-context.ts` đã kiểm chứng qua Phần 3-7 cho use case "actor gọi
+qua AI" thay vì "actor gọi trực tiếp qua UI". Sai ở đây là P0 Blocker #1/#2
+(`PART8_SPEC_DIGEST.md` §6.13) — mức nghiêm trọng ngang với chính bài học
+gốc "Company A không mặc định thấy/ghi Company B" (CLAUDE.md, Điều cấm).
+
+**Hệ quả:** Business tool wrapper cho Ecosystem AI KHÔNG có "God-mode
+read" — mọi tool Ecosystem-scope vẫn gọi `requireCompanyContextForActor`
+hoặc tương đương cho ĐÚNG Founder actor đang đứng sau AI, dùng permission
+thật của actor đó, không có nhánh tắt "vì đây là Ecosystem AI nên bỏ qua
+check". Cross-company/cross-ecosystem attack scenario (member A xin data
+Company B; Company Admin xin quyền Founder) là test bắt buộc trong AI
+Evaluation Suite (ADR sẽ viết riêng khi tới bước Evaluation, thứ tự ưu
+tiên 16/17 theo `PART8_SPEC_DIGEST.md` §8).
+
+## ADR-060 — Observe/Signal layer: code sinh fact xác định trước, AI chỉ diễn giải; AiSignal dedup theo fingerprint, không tự đọc toàn DB định kỳ
+
+**Quyết định:** Mỗi domain (Work/CRM/Finance/Payroll/Inventory/Healthcare,
+Phần 4-7) expose 1 tập "structured fact query" xác định (deterministic) —
+vd `getOverdueReceivables()`, `getLowStockItems()` — trả fact/metric/
+threshold đã tính THẬT bằng code. `AiSignal` (model mới) lưu 1 tín hiệu đã
+phát hiện: `type`, `severity`, `evidenceRefs` (bắt buộc, không evidence thì
+không tạo signal), `observedValue`, `status`
+(OPEN/ACKNOWLEDGED/RESOLVED/DISMISSED), có `fingerprint` để dedup (không
+báo lại đúng 1 vấn đề mỗi chu kỳ scan). AI KHÔNG được tự "quét" bảng dữ
+liệu thô để tìm vấn đề — chỉ được gọi các structured fact query đã định
+nghĩa, rồi DIỄN GIẢI (không tự sinh số liệu).
+
+**Vì sao:** Bất biến XCIV-CIX/XCVIII (`PART8_SPEC_DIGEST.md` §7) là ranh
+giới "code sinh fact, AI diễn giải" áp dụng xuyên suốt toàn bộ Digital COO
+— vi phạm điều này (để LLM tự tính/tự suy đoán số liệu tài chính/tồn kho)
+là chính xác loại lỗi bất biến CCXXV/CCXXVIII cấm ("không bao giờ để LLM tự
+tính tổng tiền", "không tự bịa số lượng tồn kho"). Dedup theo fingerprint
+(bất biến CI) ngăn "alert fatigue" (bất biến DXL/DXLI) — bài học vận hành
+thật, không phải lý thuyết.
+
+**Hệ quả:** Domain Phần 4-7 hiện có (WorkItem/Customer/Sale/PayrollRun/
+InventoryItem/MedicalCase...) cần bổ sung các hàm "get overdue/low-stock/
+..." nếu chưa có — đây là hàm ĐỌC THUẦN, không đổi bất biến domain hiện
+có, không cần re-review Phần 3-7 đã chốt (không "redesign authorization
+foundation" — `PROJECT_STATE.json` doNotRedo). `AiSignal` không bắt buộc
+persist MỌI signal tính được nếu tính tại read-time đủ rẻ (bất biến XCIX
+để ngỏ) — quyết định cụ thể per-domain khi implement, không chốt cứng ở
+ADR này.
